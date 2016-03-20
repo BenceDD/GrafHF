@@ -22,6 +22,7 @@ const unsigned int windowWidth = 600, windowHeight = 600;
 
 // OpenGL major and minor versions
 int majorVersion = 3, minorVersion = 0;
+using f = float;
 
 void getErrorInfo(unsigned int handle) {
 	int logLen;
@@ -112,6 +113,16 @@ public:
 	}
 
 	operator float*() { return &m[0][0]; }
+
+	float& operator()(int i, int j) { return m[i][j]; }
+
+	mat4 T() const {
+		mat4 ret;
+		for (int i = 0; i < 4; ++i)
+			for (int j = 0; j < 4; ++j)
+				ret(j, i) = m[i][j];
+		return ret;
+	}
 
 	mat4 Translation(float x, float y, float z) {
 		mat4 M(*this);
@@ -325,10 +336,10 @@ public:
 		if (startTime == 0)
 			startTime = time;
 
-		int periodTime = 1000;
+		int periodTime = 2000;
 		float pulse = sinf(((time - startTime) % periodTime) / (float)periodTime * 3.1415 * 2.0);
 
-		size = 0.3 + pulse / 100.0;
+	//	size = 0.3 + pulse / 100.0;
 		angle = pulse;
 
 		// pulzál és forog az idõtõl függetlenül -> size és angle változik
@@ -351,7 +362,6 @@ public:
 		M[5] = d*cosf(angle) - b*sinf(angle);
 
 
-
 		mat4 mx(
 			size, 0, 0, 0,
 			0, size, 0, 0,
@@ -359,8 +369,7 @@ public:
 			0, 0, 0, 1
 			);
 
-
-		line.Draw(mx);
+		line.Draw(M);
 	}
 };
 
