@@ -275,39 +275,26 @@ public:
 	}
 };
 
-struct V2 {
-	float x, y;
-};
-
-class CatmullRom {
-	V2 points[20];
-public:
-	void AddPoint(V2 point) {
-		// felvesz egy újabb pontot
-	}
-
-	void GetState(V2* point) {
-		// frissíti a paraméterül kapott pozíciót
-	}
-};
-
 class Star {
 	LineStrip line;
-	V2 position;
-	float size, angle, shininess;
+	float posX, posY;
+	float size, defaultSize, angle, shininess;
 	long startTime;
 	Star* CoG;
 
 public:
 	Star(float shininess = 0.5) {
+		// TODO: set color by shininess!
+
 		Star* CoG = nullptr;
-		position.x = position.y = 0;
+		posX = posY = 0;
 		startTime = 0;
-		size = 0.5;
+		defaultSize = 0.2;
 	}
 
-	void SetPosition(V2 position) {
-
+	void SetPosition(float _posX, float _posY) {
+		posX = _posX;
+		posY = _posY;
 	}
 
 	void SetCoG(Star* star) { // center of gravity
@@ -326,31 +313,33 @@ public:
 				x *= 0.5;
 				y *= 0.5;
 			}
-
 			line.AddPoint(x, y);
 		}
 	}
 
 	void Animate(long int time) {
-		// first call
-		if (startTime == 0)
+		if (startTime == 0) // first call
 			startTime = time;
 
-		int periodTime = 2000;
-		float pulse = sinf(((time - startTime) % periodTime) / (float)periodTime * 3.1415 * 2.0);
+		int scalePeriodTime = 3000;
+		int rotationPeriodTime = 6000;
 
-	//	size = 0.3 + pulse / 100.0;
-		angle = pulse;
+		float scale_pulse = sinf(((time - startTime) % scalePeriodTime) / (float)scalePeriodTime * M_PI * 2.0);
+		float rotation_pulse = sinf(((time - startTime) % rotationPeriodTime) / (float)rotationPeriodTime * M_PI * 2.0);
 
-		// pulzál és forog az idõtõl függetlenül -> size és angle változik
-		// legkérdezi az új pozíciót -> kiszámolja a sajátját
+		size = defaultSize + scale_pulse / 100.0;
+		angle = rotation_pulse / 5.0;
 
+		// TODO: get new position!
 	}
 
 	void Draw() {
-		// kirajzolja a csillagot
-		mat4 M;
+		mat4 M(	size,0,	0,	0,
+				0,size,	0,	0,
+				0,	0,	0,	0,
+				0,	0,	0,	1);
 
+		// apply rotation
 		float a = M[0];
 		float b = M[1];
 		float c = M[4];
@@ -361,13 +350,9 @@ public:
 		M[4] = c*cosf(angle) - a*sinf(angle);
 		M[5] = d*cosf(angle) - b*sinf(angle);
 
-
-		mat4 mx(
-			size, 0, 0, 0,
-			0, size, 0, 0,
-			0, 0, 0, 0,
-			0, 0, 0, 1
-			);
+		// apply position
+		M[12] = posX;
+		M[13] = posY;
 
 		line.Draw(M);
 	}
@@ -387,33 +372,46 @@ public:
 
 class Scene {
 	CatmullStar brigthest;
-	Star other[2];
+	Star star1, star2;
 
 public:
-	Scene() {
+	void Create() {
+		// create the objects
+		brigthest.Create();
+		star1.Create();
+		star2.Create();
+		// set positions...
+		brigthest.SetPosition(-2, -5);
+		star1.SetPosition(4, 1);
+		star2.SetPosition(-6, 3);
 
+		// set center of gravity
+		star1.SetCoG(&brigthest);
+		star2.SetCoG(&brigthest);
 	}
 
-	void Tick(long int time) {
+	void Animate(long time) {
 		brigthest.Animate(time);
-		other[0].Animate(time);
-		other[1].Animate(time);
+		star1.Animate(time);
+		star2.Animate(time);
+	}
 
+	void Draw() {
 		brigthest.Draw();
-		other[0].Draw();
-		other[1].Draw();
+		star1.Draw();
+		star2.Draw();
 	}
 };
 
 // The virtual world: collection of two objects
-Star star;
+Scene scene;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Create objects by setting up their vertex data on the GPU
-	star.Create();
+	scene.Create();
 
 	// Create vertex shader from string
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -468,7 +466,7 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	star.Draw();
+	scene.Draw();
 	glutSwapBuffers();									// exchange the two buffers
 }
 
@@ -502,7 +500,7 @@ void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
 	camera.Animate(sec);					// animate the camera
-	star.Animate(time);
+	scene.Animate(time);
 	glutPostRedisplay();					// redraw the scene
 }
 
