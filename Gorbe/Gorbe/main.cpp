@@ -20,6 +20,7 @@ const unsigned int windowWidth = 600, windowHeight = 600;
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Innentol modosithatod...
 
+
 // OpenGL major and minor versions
 int majorVersion = 3, minorVersion = 0;
 using f = float;
@@ -61,13 +62,13 @@ const char *vertexSource = R"(
 	#version 140
     precision highp float;
 
-			uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
+				uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
 
-			in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+				in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
 	in vec3 vertexColor;	    // variable input from Attrib Array selected by glBindAttribLocation
 	out vec3 color;				// output attribute
 
-			void main() {
+				void main() {
 		color = vertexColor;														// copy color from input to output
 		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
 	}
@@ -78,13 +79,24 @@ const char *fragmentSource = R"(
 	#version 140
     precision highp float;
 
-			in vec3 color;				// variable input: interpolated color of vertex shader
+				in vec3 color;				// variable input: interpolated color of vertex shader
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
-			void main() {
+				void main() {
 		fragmentColor = vec4(color, 1); // extend RGB to RGBA
 	}
 )";
+
+// 3D point in homogeneous coordinates
+struct vec4 {
+	float v[4];
+
+	operator float*() { return &v[0]; }
+
+	vec4(float x = 0, float y = 0, float z = 0, float w = 1) {
+		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
+	}
+};
 
 // row-major matrix 4x4
 struct mat4 {
@@ -114,55 +126,45 @@ public:
 
 	operator float*() { return &m[0][0]; }
 
-	float& operator()(int i, int j) { return m[i][j]; }
-
-	mat4 T() const {
-		mat4 ret;
-		for (int i = 0; i < 4; ++i)
-			for (int j = 0; j < 4; ++j)
-				ret(j, i) = m[i][j];
-		return ret;
+	static mat4 I() {
+		return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
 	}
 
-	mat4 Translation(float x, float y, float z) {
+	mat4 Scale(float size) {
 		mat4 M(*this);
-		M[15] = M[0] * x * x + M[1] * y * y + M[2] * z * z +
-			M[3] * y * z + M[5] * x * z + M[6] * x * y -
-			M[7] * x - M[10] * y - M[11] * z + M[15];
-		M[7] = M[13] = -2 * M[0] * x - M[5] * z - M[6] * y + M[7];
-		M[10] = -2 * M[1] * y - M[3] * z - M[6] * x + M[10];
-		M[11] = M[14] = -2 * M[2] * z - M[3] * y - M[5] * x + M[11];
+		M[0] = M[5] = size;
 		return M;
 	}
 
+	mat4 Rotate(float angle) {
+		mat4 M(*this);
+		float a = M[0];
+		float b = M[1];
+		float c = M[4];
+		float d = M[5];
+		M[0] = a*cosf(angle) + c*sinf(angle);
+		M[1] = b*cosf(angle) + d*sinf(angle);
+		M[4] = c*cosf(angle) - a*sinf(angle);
+		M[5] = d*cosf(angle) - b*sinf(angle);
+		return M;
+	}
 
-	static mat4 I() {
-		return mat4(
-			1,0,0,0,
-			0,1,0,0,
-			0,0,1,0,
-			0,0,0,1);
+	mat4 Translate(vec4 vector) {
+		mat4 M(*this);
+		M[12] = vector.v[0];
+		M[13] = vector.v[1];
+		return M;
 	}
 };
 
-
-// 3D point in homogeneous coordinates
-struct vec4 {
-	float v[4];
-
-	vec4(float x = 0, float y = 0, float z = 0, float w = 1) {
-		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
+vec4 operator*(vec4 vec, const mat4& mat) {
+	vec4 result;
+	for (int j = 0; j < 4; j++) {
+		result.v[j] = 0;
+		for (int i = 0; i < 4; i++) result.v[j] += vec[i] * mat.m[i][j];
 	}
-
-	vec4 operator*(const mat4& mat) {
-		vec4 result;
-		for (int j = 0; j < 4; j++) {
-			result.v[j] = 0;
-			for (int i = 0; i < 4; i++) result.v[j] += v[i] * mat.m[i][j];
-		}
-		return result;
-	}
-};
+	return result;
+}
 
 // 2D camera
 struct Camera {
@@ -275,31 +277,20 @@ public:
 	}
 };
 
+
 class Star {
 	LineStrip line;
-	float posX, posY;
+	vec4 position;
 	float size, defaultSize, angle, shininess;
 	long startTime;
 	Star* CoG;
 
 public:
-	Star(float shininess = 0.5) {
-		// TODO: set color by shininess!
-
-		Star* CoG = nullptr;
-		posX = posY = 0;
-		startTime = 0;
-		defaultSize = 0.2;
-	}
-
-	void SetPosition(float _posX, float _posY) {
-		posX = _posX;
-		posY = _posY;
-	}
-
-	void SetCoG(Star* star) { // center of gravity
-		// mozgatja a csillag középpontjárt legyen szó vonzásról vagy a catmull-com pályáról
-	}
+	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0) { }
+	Star& SetPosition(vec4 _position) { position = _position; return *this; }
+	Star& SetShininess(float _shininess) { shininess = _shininess; return *this; }
+	Star& SetSize(float _size) { defaultSize = _size; return *this; }
+	Star& SetCenterOfGravity(Star* _star) { CoG = _star; return *this; }
 
 	void Create() {
 		line.Create();
@@ -318,50 +309,26 @@ public:
 	}
 
 	void Animate(long int time) {
-		if (startTime == 0) // first call
+		if (startTime == 0)	// first call
 			startTime = time;
 
-		int scalePeriodTime = 3000;
-		int rotationPeriodTime = 6000;
-
+		int scalePeriodTime = 3000, rotationPeriodTime = 6000;
 		float scale_pulse = sinf(((time - startTime) % scalePeriodTime) / (float)scalePeriodTime * M_PI * 2.0);
 		float rotation_pulse = sinf(((time - startTime) % rotationPeriodTime) / (float)rotationPeriodTime * M_PI * 2.0);
 
 		size = defaultSize + scale_pulse / 100.0;
 		angle = rotation_pulse / 5.0;
 
-		// TODO: get new position!
+		// TODO: update position!
 	}
 
 	void Draw() {
-		mat4 M(	size,0,	0,	0,
-				0,size,	0,	0,
-				0,	0,	0,	0,
-				0,	0,	0,	1);
-
-		// apply rotation
-		float a = M[0];
-		float b = M[1];
-		float c = M[4];
-		float d = M[5];
-
-		M[0] = a*cosf(angle) + c*sinf(angle);
-		M[1] = b*cosf(angle) + d*sinf(angle);
-		M[4] = c*cosf(angle) - a*sinf(angle);
-		M[5] = d*cosf(angle) - b*sinf(angle);
-
-		// apply position
-		M[12] = posX;
-		M[13] = posY;
-
-		line.Draw(M);
+		line.Draw(mat4::I().Scale(size).Translate(position).Rotate(angle));
 	}
 };
 
 class CatmullStar : public Star {
 public:
-	CatmullStar(float shininess = 0.9) : Star(shininess) { }
-
 	void Animate(long int time) {
 		// pulzál és forog
 		Star::Animate(time);
@@ -380,14 +347,11 @@ public:
 		brigthest.Create();
 		star1.Create();
 		star2.Create();
-		// set positions...
-		brigthest.SetPosition(-2, -5);
-		star1.SetPosition(4, 1);
-		star2.SetPosition(-6, 3);
 
-		// set center of gravity
-		star1.SetCoG(&brigthest);
-		star2.SetCoG(&brigthest);
+		// set positions and gravity
+		brigthest.SetPosition(vec4(-2, -5)).SetSize(0.2);
+		star1.SetPosition(vec4(4, 1)).SetSize(0.2).SetCenterOfGravity(&brigthest);
+		star2.SetPosition(vec4(-6, 3)).SetSize(0.2).SetCenterOfGravity(&brigthest);
 	}
 
 	void Animate(long time) {
@@ -485,8 +449,8 @@ void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
 		float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 		float cY = 1.0f - 2.0f * pY / windowHeight;
-	//	lineStrip.AddPoint(cX, cY);
-	//	lineStrip2.AddPoint(cY, cX);
+		//	lineStrip.AddPoint(cX, cY);
+		//	lineStrip2.AddPoint(cY, cX);
 		glutPostRedisplay();     // redraw
 	}
 }
