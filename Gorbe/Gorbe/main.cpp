@@ -110,7 +110,28 @@ public:
 		}
 		return result;
 	}
+
 	operator float*() { return &m[0][0]; }
+
+	mat4 Translation(float x, float y, float z) {
+		mat4 M(*this);
+		M[15] = M[0] * x * x + M[1] * y * y + M[2] * z * z +
+			M[3] * y * z + M[5] * x * z + M[6] * x * y -
+			M[7] * x - M[10] * y - M[11] * z + M[15];
+		M[7] = M[13] = -2 * M[0] * x - M[5] * z - M[6] * y + M[7];
+		M[10] = -2 * M[1] * y - M[3] * z - M[6] * x + M[10];
+		M[11] = M[14] = -2 * M[2] * z - M[3] * y - M[5] * x + M[11];
+		return M;
+	}
+
+
+	static mat4 I() {
+		return mat4(
+			1,0,0,0,
+			0,1,0,0,
+			0,0,1,0,
+			0,0,0,1);
+	}
 };
 
 
@@ -183,73 +204,6 @@ Camera camera;
 // handle of the shader program
 unsigned int shaderProgram;
 
-class Triangle {
-	unsigned int vao;	// vertex array object id
-	float sx, sy;		// scaling
-	float wTx, wTy;		// translation
-public:
-	Triangle() {
-		Animate(0);
-	}
-
-	void Create() {
-		glGenVertexArrays(1, &vao);	// create 1 vertex array object
-		glBindVertexArray(vao);		// make it active
-
-		unsigned int vbo[2];		// vertex buffer objects
-		glGenBuffers(2, &vbo[0]);	// Generate 2 vertex buffer objects
-
-									// vertex coordinates: vbo[0] -> Attrib Array 0 -> vertexPosition of the vertex shader
-		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]); // make it active, it is an array
-		static float vertexCoords[] = { -8, -8, -6, 10, 8, -2 };	// vertex data on the CPU
-		glBufferData(GL_ARRAY_BUFFER,      // copy to the GPU
-			sizeof(vertexCoords), // number of the vbo in bytes
-			vertexCoords,		   // address of the data array on the CPU
-			GL_STATIC_DRAW);	   // copy to that part of the memory which is not modified 
-								   // Map Attribute Array 0 to the current bound vertex buffer (vbo[0])
-		glEnableVertexAttribArray(0);
-		// Data organization of Attribute Array 0 
-		glVertexAttribPointer(0,			// Attribute Array 0
-			2, GL_FLOAT,  // components/attribute, component type
-			GL_FALSE,		// not in fixed point format, do not normalized
-			0, NULL);     // stride and offset: it is tightly packed
-
-						  // vertex colors: vbo[1] -> Attrib Array 1 -> vertexColor of the vertex shader
-		glBindBuffer(GL_ARRAY_BUFFER, vbo[1]); // make it active, it is an array
-		static float vertexColors[] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };	// vertex data on the CPU
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertexColors), vertexColors, GL_STATIC_DRAW);	// copy to the GPU
-
-																							// Map Attribute Array 1 to the current bound vertex buffer (vbo[1])
-		glEnableVertexAttribArray(1);  // Vertex position
-									   // Data organization of Attribute Array 1
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL); // Attribute Array 1, components/attribute, component type, normalize?, tightly packed
-	}
-
-	void Animate(float t) {
-		sx = 1; // *sinf(t);
-		sy = 1; // *cosf(t);
-		wTx = 0; // 4 * cosf(t / 2);
-		wTy = 0; // 4 * sinf(t / 2);
-	}
-
-	void Draw() {
-		mat4 M(sx, 0, 0, 0,
-			0, sy, 0, 0,
-			0, 0, 0, 0,
-			wTx, wTy, 0, 1); // model matrix
-
-		mat4 MVPTransform = M * camera.V() * camera.P();
-
-		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
-		int location = glGetUniformLocation(shaderProgram, "MVP");
-		if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform); // set uniform variable MVP to the MVPTransform
-		else printf("uniform MVP cannot be set\n");
-
-		glBindVertexArray(vao);	// make the vao and its vbos active playing the role of the data source
-		glDrawArrays(GL_TRIANGLES, 0, 3);	// draw a single triangle with vertices defined in vao
-	}
-};
-
 class LineStrip {
 	GLuint vao, vbo;        // vertex array object, vertex buffer object
 	float  vertexData[100]; // interleaved data of coordinates and colors
@@ -278,7 +232,6 @@ public:
 
 											// Map attribute array 1 to the color data of the interleaved vbo																							
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
-
 	}
 
 	void AddPoint(float cX, float cY) {
@@ -293,37 +246,165 @@ public:
 		vertexData[5 * nVertices + 4] = 0; // blue
 		nVertices++;
 		// copy data to the GPU
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);	// fix!!
 		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
 	}
 
-	void Draw() {
+	void Draw(mat4 M) {
 		if (nVertices > 0) {
-			mat4 VPTransform = camera.V() * camera.P();
+			mat4 MVPTransform = M * camera.V() * camera.P();
 
 			int location = glGetUniformLocation(shaderProgram, "MVP");
-			if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, VPTransform);
+			if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform);
 			else printf("uniform MVP cannot be set\n");
 
 			glBindVertexArray(vao);
-			glDrawArrays(GL_LINE_STRIP, 0, nVertices);
+			glDrawArrays(GL_TRIANGLE_FAN, 0, nVertices);
 		}
 	}
 };
 
+struct V2 {
+	float x, y;
+};
+
+class CatmullRom {
+	V2 points[20];
+public:
+	void AddPoint(V2 point) {
+		// felvesz egy újabb pontot
+	}
+
+	void GetState(V2* point) {
+		// frissíti a paraméterül kapott pozíciót
+	}
+};
+
+class Star {
+	LineStrip line;
+	V2 position;
+	float size, angle, shininess;
+	long startTime;
+	Star* CoG;
+
+public:
+	Star(float shininess = 0.5) {
+		Star* CoG = nullptr;
+		position.x = position.y = 0;
+		startTime = 0;
+		size = 0.5;
+	}
+
+	void SetPosition(V2 position) {
+
+	}
+
+	void SetCoG(Star* star) { // center of gravity
+		// mozgatja a csillag középpontjárt legyen szó vonzásról vagy a catmull-com pályáról
+	}
+
+	void Create() {
+		line.Create();
+		line.AddPoint(0, 0);
+		for (int i = 0; i < 15; ++i) {
+			float a = i / 14.0 * 3.1415 * 2.0;
+			float x = sin(a);
+			float y = cos(a);
+
+			if (i % 2) {
+				x *= 0.5;
+				y *= 0.5;
+			}
+
+			line.AddPoint(x, y);
+		}
+	}
+
+	void Animate(long int time) {
+		// first call
+		if (startTime == 0)
+			startTime = time;
+
+		int periodTime = 1000;
+		float pulse = sinf(((time - startTime) % periodTime) / (float)periodTime * 3.1415 * 2.0);
+
+		size = 0.3 + pulse / 100.0;
+		angle = pulse;
+
+		// pulzál és forog az idõtõl függetlenül -> size és angle változik
+		// legkérdezi az új pozíciót -> kiszámolja a sajátját
+
+	}
+
+	void Draw() {
+		// kirajzolja a csillagot
+		mat4 M;
+
+		float a = M[0];
+		float b = M[1];
+		float c = M[4];
+		float d = M[5];
+
+		M[0] = a*cosf(angle) + c*sinf(angle);
+		M[1] = b*cosf(angle) + d*sinf(angle);
+		M[4] = c*cosf(angle) - a*sinf(angle);
+		M[5] = d*cosf(angle) - b*sinf(angle);
+
+
+
+		mat4 mx(
+			size, 0, 0, 0,
+			0, size, 0, 0,
+			0, 0, 0, 0,
+			0, 0, 0, 1
+			);
+
+
+		line.Draw(mx);
+	}
+};
+
+class CatmullStar : public Star {
+public:
+	CatmullStar(float shininess = 0.9) : Star(shininess) { }
+
+	void Animate(long int time) {
+		// pulzál és forog
+		Star::Animate(time);
+
+		// Catmulltól megkérdezi az új pozíciót
+	}
+};
+
+class Scene {
+	CatmullStar brigthest;
+	Star other[2];
+
+public:
+	Scene() {
+
+	}
+
+	void Tick(long int time) {
+		brigthest.Animate(time);
+		other[0].Animate(time);
+		other[1].Animate(time);
+
+		brigthest.Draw();
+		other[0].Draw();
+		other[1].Draw();
+	}
+};
+
 // The virtual world: collection of two objects
-Triangle triangle;
-LineStrip lineStrip;
-LineStrip lineStrip2;
+Star star;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Create objects by setting up their vertex data on the GPU
-	triangle.Create();
-	lineStrip.Create();
-	lineStrip2.Create();
+	star.Create();
 
 	// Create vertex shader from string
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -378,9 +459,7 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	triangle.Draw();
-	lineStrip.Draw();
-	lineStrip2.Draw();
+	star.Draw();
 	glutSwapBuffers();									// exchange the two buffers
 }
 
@@ -399,8 +478,8 @@ void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
 		float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 		float cY = 1.0f - 2.0f * pY / windowHeight;
-		lineStrip.AddPoint(cX, cY);
-		lineStrip2.AddPoint(cY, cX);
+	//	lineStrip.AddPoint(cX, cY);
+	//	lineStrip2.AddPoint(cY, cX);
 		glutPostRedisplay();     // redraw
 	}
 }
@@ -414,7 +493,7 @@ void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
 	camera.Animate(sec);					// animate the camera
-	triangle.Animate(sec);					// animate the triangle object
+	star.Animate(time);
 	glutPostRedisplay();					// redraw the scene
 }
 
