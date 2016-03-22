@@ -62,13 +62,13 @@ const char *vertexSource = R"(
 	#version 140
     precision highp float;
 
-					uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
+							uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
 
-					in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+							in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
 	in vec3 vertexColor;	    // variable input from Attrib Array selected by glBindAttribLocation
 	out vec3 color;				// output attribute
 
-					void main() {
+							void main() {
 		color = vertexColor;														// copy color from input to output
 		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
 	}
@@ -79,10 +79,10 @@ const char *fragmentSource = R"(
 	#version 140
     precision highp float;
 
-					in vec3 color;				// variable input: interpolated color of vertex shader
+							in vec3 color;				// variable input: interpolated color of vertex shader
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
-					void main() {
+							void main() {
 		fragmentColor = vec4(color, 1); // extend RGB to RGBA
 	}
 )";
@@ -284,6 +284,7 @@ class CatmullRom {
 	int n;
 	const int resolution;
 
+	// these may be const lambdas, capturing time or index... (is it possible? when capture happens?)
 	V4 v(const int i) {
 		if (i == 0 || n - 2)
 			return V4(0, 0);
@@ -298,6 +299,7 @@ class CatmullRom {
 		return ((2 * (r[i] - r[i + 1])) / pow(t[i + 1] - t[i], 3)) + ((v(i + 1) + v(i)) / pow(t[i + 1] - t[i], 2));
 	}
 
+	// have to go around by cycle...
 	int index(float time) {
 		int i;
 		for (i = 1; i < n; i++)
@@ -307,6 +309,12 @@ class CatmullRom {
 
 public:
 	CatmullRom() : n(0), resolution(20) {}
+
+	void AddPoint(const V4& point) {
+		if (n == 20)
+			return;
+		r[n++] = point;
+	}
 
 	void addTime() {
 		if (n == 20)
@@ -318,8 +326,9 @@ public:
 		n++;
 	}
 
-	void Draw() {
+	V4 GetPlace
 
+		void Draw() {
 		if (n < 2)
 			return;
 
@@ -334,24 +343,25 @@ public:
 	}
 };
 
-
 class Star {
 	LineStrip line;
 	V4 position;
 	f size, defaultSize, angle, shininess;
 	long startTime, scale_length, rotation_length, timeShift;
-	int numberOfVertexes;
+	int numberOfVertices;
 	Star* CoG;
+
+
 
 public:
 	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0),
-		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertexes(7) {
+		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertices(7) {
 	}
 	Star& SetPosition(V4 _position) { position = _position; return *this; }
 	Star& SetShininess(f _shininess) { shininess = _shininess; return *this; }
 	Star& SetSize(f _size) { defaultSize = _size; return *this; }
 	Star& SetCenterOfGravity(Star* _star) { CoG = _star; return *this; }
-	Star& SetNumberOfVertexes(int n) { numberOfVertexes = n; return *this; }
+	Star& SetNumberOfVertices(int n) { numberOfVertices = n; return *this; }
 	Star& SetAnimationParameters(long _shift = 0, long _scale_length = 3000, long _rotation_length = 6000) {
 		timeShift = _shift;
 		scale_length = _scale_length;
@@ -363,8 +373,8 @@ public:
 	void Create() {
 		line.Create();
 		line.AddPoint(0, 0);
-		for (int i = 0; i < numberOfVertexes * 2 + 1; ++i) {
-			f a = i / (float)(numberOfVertexes * 2) * 3.1415 * 2.0;
+		for (int i = 0; i < numberOfVertices * 2 + 1; ++i) {
+			f a = i / (float)(numberOfVertices * 2) * 3.1415 * 2.0;
 			f x = sin(a);
 			f y = cos(a);
 
@@ -412,9 +422,9 @@ class Scene {
 public:
 	void Create() {
 		// create the objects
-		brigthest.SetNumberOfVertexes(5).Create();
-		star1.SetNumberOfVertexes(5).Create();
-		star2.SetNumberOfVertexes(5).Create();
+		brigthest.SetNumberOfVertices(5).Create();
+		star1.SetNumberOfVertices(5).Create();
+		star2.SetNumberOfVertices(5).Create();
 
 		// set positions and gravity
 		brigthest.SetPosition(V4(-2, -5)).SetSize(0.15).SetAnimationParameters(1500);
