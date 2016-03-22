@@ -88,122 +88,107 @@ const char *fragmentSource = R"(
 )";
 
 // 3D point in homogeneous coordinates
-struct vec4 {
-	float v[4];
+struct V4 {
+	f v[4];
 
-	operator float*() { return &v[0]; }
-
-	vec4(float x = 0, float y = 0, float z = 0, float w = 1) {
+	explicit V4(f x = 0, f y = 0, f z = 0, f w = 1) {
 		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
 	}
+
+	operator f*() { return &v[0]; }
 };
 
 // row-major matrix 4x4
-struct mat4 {
-	float m[4][4];
-public:
-	mat4() {}
-	mat4(float m00, float m01, float m02, float m03,
-		float m10, float m11, float m12, float m13,
-		float m20, float m21, float m22, float m23,
-		float m30, float m31, float m32, float m33) {
+struct M4 {
+	f m[4][4];
+
+	M4() {}
+	M4(f m00, f m01, f m02, f m03,
+		f m10, f m11, f m12, f m13,
+		f m20, f m21, f m22, f m23,
+		f m30, f m31, f m32, f m33) {
 		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
 		m[1][0] = m10; m[1][1] = m11; m[1][2] = m02; m[1][3] = m13;
 		m[2][0] = m20; m[2][1] = m21; m[2][2] = m02; m[2][3] = m23;
 		m[3][0] = m30; m[3][1] = m31; m[3][2] = m02; m[3][3] = m33;
 	}
 
-	mat4 operator*(const mat4& right) {
-		mat4 result;
+	operator f*() { return &m[0][0]; }
+	
+	M4 operator*(const M4& right) const {
+		M4 result;
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
 				result.m[i][j] = 0;
-				for (int k = 0; k < 4; k++) result.m[i][j] += m[i][k] * right.m[k][j];
+				for (int k = 0; k < 4; k++) 
+					result.m[i][j] += m[i][k] * right.m[k][j];
 			}
 		}
 		return result;
 	}
 
-	operator float*() { return &m[0][0]; }
-
-	static mat4 I() {
-		return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1);
-	}
-
-	mat4 Scale(float size) {
-		mat4 M(*this);
-		M[0] = M[5] = size;
+	M4 Scale(const V4& vec) const {
+		M4 M(*this);
+		M.m[0][0] *= vec.v[0];
+		M.m[1][1] *= vec.v[1];
+		M.m[2][2] *= vec.v[2];
 		return M;
 	}
 
-	mat4 Rotate(float angle) {
-		mat4 M(*this);
-		float a = M[0];
-		float b = M[1];
-		float c = M[4];
-		float d = M[5];
-		M[0] = a*cosf(angle) + c*sinf(angle);
-		M[1] = b*cosf(angle) + d*sinf(angle);
-		M[4] = c*cosf(angle) - a*sinf(angle);
-		M[5] = d*cosf(angle) - b*sinf(angle);
+	M4 RotateZ(f angle) const {
+		M4 M(*this);
+		f a = M.m[0][0];
+		f b = M.m[0][1];
+		f c = M.m[1][0];
+		f d = M.m[1][1];
+		M.m[0][0] = a*cosf(angle) + c*sinf(angle);
+		M.m[0][1] = b*cosf(angle) + d*sinf(angle);
+		M.m[1][0] = c*cosf(angle) - a*sinf(angle);
+		M.m[1][1] = d*cosf(angle) - b*sinf(angle);
 		return M;
 	}
 
-	mat4 Translate(vec4 vector) {
-		mat4 M(*this);
-		M[12] = vector.v[0];
-		M[13] = vector.v[1];
+	M4 Translate(const V4& vector) const {
+		M4 M(*this);
+		M.m[3][0] = vector.v[0];
+		M.m[3][1] = vector.v[1];
+		M.m[3][2] = vector.v[2];
 		return M;
 	}
+
+	static M4 I() { return M4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
 };
 
-vec4 operator*(vec4 vec, const mat4& mat) {
-	vec4 result;
+V4 operator*(const V4& vec, const M4& mat) {
+	V4 result;
 	for (int j = 0; j < 4; j++) {
 		result.v[j] = 0;
-		for (int i = 0; i < 4; i++) result.v[j] += vec[i] * mat.m[i][j];
+		for (int i = 0; i < 4; i++) 
+			result.v[j] += vec.v[i] * mat.m[i][j];
 	}
 	return result;
 }
 
 // 2D camera
 struct Camera {
-	float wCx, wCy;	// center in world coordinates
-	float wWx, wWy;	// width and height in world coordinates
+	f wCx, wCy;	// center in world coordinates
+	f wWx, wWy;	// width and height in world coordinates
 public:
-	Camera() {
-		Animate(0);
-	}
+	Camera() { Animate(0); }
 
-	mat4 V() { // view matrix: translates the center to the origin
-		return mat4(1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			-wCx, -wCy, 0, 1);
-	}
+	// view matrix: translates the center to the origin
+	M4 V() const { return M4::I().Translate(V4(-wCx, -wCy)); }
 
-	mat4 P() { // projection matrix: scales it to be a square of edge length 2
-		return mat4(2 / wWx, 0, 0, 0,
-			0, 2 / wWy, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1);
-	}
+	// projection matrix: scales it to be a square of edge length 2
+	M4 P() const { return M4::I().Scale(V4(2 / wWx, 2 / wWy, 1)); }
 
-	mat4 Vinv() { // inverse view matrix
-		return mat4(1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			wCx, wCy, 0, 1);
-	}
+	// inverse view matrix
+	M4 Vinv() const { return M4::I().Translate(V4(-wCx, -wCy, 1)); }
 
-	mat4 Pinv() { // inverse projection matrix
-		return mat4(wWx / 2, 0, 0, 0,
-			0, wWy / 2, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1);
-	}
+	// inverse projection matrix
+	M4 Pinv() const { return M4::I().Scale(V4(wWx / 2,  wWy / 2, 1)); }
 
-	void Animate(float t) {
+	void Animate(f t) {
 		wCx = 0; // 10 * cosf(t);
 		wCy = 0;
 		wWx = 20;
@@ -219,7 +204,7 @@ unsigned int shaderProgram;
 
 class LineStrip {
 	GLuint vao, vbo;        // vertex array object, vertex buffer object
-	float  vertexData[100]; // interleaved data of coordinates and colors
+	f vertexData[100];		// interleaved data of coordinates and colors
 	int    nVertices;       // number of vertices
 public:
 	LineStrip() {
@@ -247,10 +232,10 @@ public:
 		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
 	}
 
-	void AddPoint(float cX, float cY) {
+	void AddPoint(f cX, f cY) {
 		if (nVertices >= 20) return;
 
-		vec4 wVertex = vec4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
+		V4 wVertex = V4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
 		// fill interleaved data
 		vertexData[5 * nVertices] = wVertex.v[0];
 		vertexData[5 * nVertices + 1] = wVertex.v[1];
@@ -263,9 +248,9 @@ public:
 		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
 	}
 
-	void Draw(mat4 M) {
+	void Draw(M4 M) const {
 		if (nVertices > 0) {
-			mat4 MVPTransform = M * camera.V() * camera.P();
+			M4 MVPTransform = M * camera.V() * camera.P();
 
 			int location = glGetUniformLocation(shaderProgram, "MVP");
 			if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform);
@@ -280,25 +265,35 @@ public:
 
 class Star {
 	LineStrip line;
-	vec4 position;
-	float size, defaultSize, angle, shininess;
-	long startTime;
+	V4 position;
+	f size, defaultSize, angle, shininess;
+	long startTime, scale_length, rotation_length, timeShift;
+	int numberOfVertexes;
 	Star* CoG;
 
 public:
-	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0) { }
-	Star& SetPosition(vec4 _position) { position = _position; return *this; }
-	Star& SetShininess(float _shininess) { shininess = _shininess; return *this; }
-	Star& SetSize(float _size) { defaultSize = _size; return *this; }
+	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0), 
+		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertexes(7) { }
+	Star& SetPosition(V4 _position) { position = _position; return *this; }
+	Star& SetShininess(f _shininess) { shininess = _shininess; return *this; }
+	Star& SetSize(f _size) { defaultSize = _size; return *this; }
 	Star& SetCenterOfGravity(Star* _star) { CoG = _star; return *this; }
+	Star& SetNumberOfVertexes(int n) { numberOfVertexes = n; return *this; }
+	Star& SetAnimationParameters(long _shift = 0, long _scale_length = 3000, long _rotation_length = 6000) {
+		timeShift = _shift;
+		scale_length = _scale_length;
+		rotation_length = _rotation_length;
+		return *this;
+	}
+	V4 GetPosition() { return position; }
 
 	void Create() {
 		line.Create();
 		line.AddPoint(0, 0);
-		for (int i = 0; i < 15; ++i) {
-			float a = i / 14.0 * 3.1415 * 2.0;
-			float x = sin(a);
-			float y = cos(a);
+		for (int i = 0; i < numberOfVertexes * 2 + 1; ++i) {
+			f a = i / (float)(numberOfVertexes * 2) * 3.1415 * 2.0;
+			f x = sin(a);
+			f y = cos(a);
 
 			if (i % 2) {
 				x *= 0.5;
@@ -308,13 +303,13 @@ public:
 		}
 	}
 
-	void Animate(long int time) {
+	void Animate(long time) {
 		if (startTime == 0)	// first call
 			startTime = time;
 
-		int scalePeriodTime = 3000, rotationPeriodTime = 6000;
-		float scale_pulse = sinf(((time - startTime) % scalePeriodTime) / (float)scalePeriodTime * M_PI * 2.0);
-		float rotation_pulse = sinf(((time - startTime) % rotationPeriodTime) / (float)rotationPeriodTime * M_PI * 2.0);
+		long duration = time - startTime + timeShift;
+		f scale_pulse = sinf((duration % scale_length) / (float)scale_length * M_PI * 2.0);
+		f rotation_pulse = sinf((duration % rotation_length) / (float)rotation_length * M_PI * 2.0);
 
 		size = defaultSize + scale_pulse / 100.0;
 		angle = rotation_pulse / 5.0;
@@ -322,8 +317,8 @@ public:
 		// TODO: update position!
 	}
 
-	void Draw() {
-		line.Draw(mat4::I().Scale(size).Translate(position).Rotate(angle));
+	void Draw() const {
+		line.Draw(M4::I().Scale(V4(size, size)).Translate(position).RotateZ(angle));
 	}
 };
 
@@ -344,14 +339,14 @@ class Scene {
 public:
 	void Create() {
 		// create the objects
-		brigthest.Create();
-		star1.Create();
-		star2.Create();
+		brigthest.SetNumberOfVertexes(5).Create();
+		star1.SetNumberOfVertexes(5).Create();
+		star2.SetNumberOfVertexes(5).Create();
 
 		// set positions and gravity
-		brigthest.SetPosition(vec4(-2, -5)).SetSize(0.2);
-		star1.SetPosition(vec4(4, 1)).SetSize(0.2).SetCenterOfGravity(&brigthest);
-		star2.SetPosition(vec4(-6, 3)).SetSize(0.2).SetCenterOfGravity(&brigthest);
+		brigthest.SetPosition(V4(-2, -5)).SetSize(0.15).SetAnimationParameters(1500);
+		star1.SetPosition(V4(4, 1)).SetSize(0.25).SetCenterOfGravity(&brigthest).SetAnimationParameters(2500);
+		star2.SetPosition(V4(-6, 3)).SetSize(0.2).SetCenterOfGravity(&brigthest);
 	}
 
 	void Animate(long time) {
@@ -447,8 +442,8 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 // Mouse click event
 void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
-		float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
-		float cY = 1.0f - 2.0f * pY / windowHeight;
+		f cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+		f cY = 1.0f - 2.0f * pY / windowHeight;
 		//	lineStrip.AddPoint(cX, cY);
 		//	lineStrip2.AddPoint(cY, cX);
 		glutPostRedisplay();     // redraw
@@ -462,7 +457,7 @@ void onMouseMotion(int pX, int pY) {
 // Idle event indicating that some time elapsed: do animation here
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
-	float sec = time / 1000.0f;				// convert msec to sec
+	f sec = time / 1000.0f;				// convert msec to sec
 	camera.Animate(sec);					// animate the camera
 	scene.Animate(time);
 	glutPostRedisplay();					// redraw the scene
