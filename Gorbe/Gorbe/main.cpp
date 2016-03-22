@@ -62,13 +62,13 @@ const char *vertexSource = R"(
 	#version 140
     precision highp float;
 
-				uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
+					uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
 
-				in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+					in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
 	in vec3 vertexColor;	    // variable input from Attrib Array selected by glBindAttribLocation
 	out vec3 color;				// output attribute
 
-				void main() {
+					void main() {
 		color = vertexColor;														// copy color from input to output
 		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
 	}
@@ -79,10 +79,10 @@ const char *fragmentSource = R"(
 	#version 140
     precision highp float;
 
-				in vec3 color;				// variable input: interpolated color of vertex shader
+					in vec3 color;				// variable input: interpolated color of vertex shader
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
-				void main() {
+					void main() {
 		fragmentColor = vec4(color, 1); // extend RGB to RGBA
 	}
 )";
@@ -96,6 +96,22 @@ struct V4 {
 	}
 
 	operator f*() { return &v[0]; }
+
+	friend V4 operator* (f scalar, const V4& v) {
+		return V4(v.v[0] * scalar, v.v[1] * scalar, v.v[2] * scalar, v.v[3] * scalar);
+	}
+
+	friend V4 operator/ (const V4& v, f scalar) {
+		return V4(v.v[0] / scalar, v.v[1] / scalar, v.v[2] / scalar, v.v[3] / scalar);
+	}
+
+	friend V4 operator+ (const V4& l, const V4& r) {
+		return V4(l.v[0] + r.v[0], l.v[1] + r.v[1], l.v[2] + r.v[2], l.v[3] + r.v[3]);
+	}
+
+	friend V4 operator- (const V4& l, const V4& r) {
+		return V4(l.v[0] - r.v[0], l.v[1] - r.v[1], l.v[2] - r.v[2], l.v[3] - r.v[3]);
+	}
 };
 
 // row-major matrix 4x4
@@ -114,13 +130,13 @@ struct M4 {
 	}
 
 	operator f*() { return &m[0][0]; }
-	
+
 	M4 operator*(const M4& right) const {
 		M4 result;
 		for (int i = 0; i < 4; i++) {
 			for (int j = 0; j < 4; j++) {
 				result.m[i][j] = 0;
-				for (int k = 0; k < 4; k++) 
+				for (int k = 0; k < 4; k++)
 					result.m[i][j] += m[i][k] * right.m[k][j];
 			}
 		}
@@ -163,7 +179,7 @@ V4 operator*(const V4& vec, const M4& mat) {
 	V4 result;
 	for (int j = 0; j < 4; j++) {
 		result.v[j] = 0;
-		for (int i = 0; i < 4; i++) 
+		for (int i = 0; i < 4; i++)
 			result.v[j] += vec.v[i] * mat.m[i][j];
 	}
 	return result;
@@ -186,7 +202,7 @@ public:
 	M4 Vinv() const { return M4::I().Translate(V4(-wCx, -wCy, 1)); }
 
 	// inverse projection matrix
-	M4 Pinv() const { return M4::I().Scale(V4(wWx / 2,  wWy / 2, 1)); }
+	M4 Pinv() const { return M4::I().Scale(V4(wWx / 2, wWy / 2, 1)); }
 
 	void Animate(f t) {
 		wCx = 0; // 10 * cosf(t);
@@ -262,6 +278,62 @@ public:
 	}
 };
 
+class CatmullRom {
+	V4 r[20];
+	f t[20];
+	int n;
+	const int resolution;
+
+	V4 v(const int i) {
+		if (i == 0 || n - 2)
+			return V4(0, 0);
+		return ((r[i + 1] - r[i]) / (t[i + 1] - t[i]) + (r[i] - r[i - 1]) / (t[i] - t[i - 1])) / 2;
+	}
+
+	V4 a2(const int i) {
+		return ((3 * (r[i + 1] - r[i])) / pow(t[i + 1] - t[i], 2)) - ((v(i + 1) + (2 * v(i))) / (t[i + 1] - t[i]));
+	}
+
+	V4 a3(const int i) {
+		return ((2 * (r[i] - r[i + 1])) / pow(t[i + 1] - t[i], 3)) + ((v(i + 1) + v(i)) / pow(t[i + 1] - t[i], 2));
+	}
+
+	int index(float time) {
+		int i;
+		for (i = 1; i < n; i++)
+			if (t[i] > time)
+				return i - 1;
+	}
+
+public:
+	CatmullRom() : n(0), resolution(20) {}
+
+	void addTime() {
+		if (n == 20)
+			return;
+
+		static long start = glutGet(GLUT_ELAPSED_TIME);
+
+		t[n] = glutGet(GLUT_ELAPSED_TIME) - start;
+		n++;
+	}
+
+	void Draw() {
+
+		if (n < 2)
+			return;
+
+		glBegin(GL_LINE_STRIP);
+		glColor3f(0.f, 1.f, 0.f);
+		float t_max = t[n - 1];
+		for (float f = 0; f < t_max; f += 1000 / resolution) {
+			int i = index(f);
+			((pow(f - t[i], 3) * a3(i)) + (pow(f - t[i], 2) * a2(i)) + ((f - t[i]) * v(i)) + r[i]);	// ???
+		}
+		glEnd();
+	}
+};
+
 
 class Star {
 	LineStrip line;
@@ -272,8 +344,9 @@ class Star {
 	Star* CoG;
 
 public:
-	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0), 
-		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertexes(7) { }
+	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0),
+		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertexes(7) {
+	}
 	Star& SetPosition(V4 _position) { position = _position; return *this; }
 	Star& SetShininess(f _shininess) { shininess = _shininess; return *this; }
 	Star& SetSize(f _size) { defaultSize = _size; return *this; }
