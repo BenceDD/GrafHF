@@ -218,9 +218,10 @@ Camera camera;
 // handle of the shader program
 unsigned int shaderProgram;
 
+template <int max_size, int draw_mode>
 class LineStrip {
 	GLuint vao, vbo;        // vertex array object, vertex buffer object
-	f vertexData[100];		// interleaved data of coordinates and colors
+	f vertexData[5 * max_size];		// interleaved data of coordinates and colors
 	int    nVertices;       // number of vertices
 public:
 	LineStrip() {
@@ -241,7 +242,7 @@ public:
 			2, 								//components/attribute,
 			GL_FLOAT, 						//component type,
 			GL_FALSE, 						//normalize?,
-			5 * sizeof(float),				//stride
+			5 * sizeof(f),					//stride
 			reinterpret_cast<void*>(0));	//offset
 
 											// Map attribute array 1 to the color data of the interleaved vbo																							
@@ -249,7 +250,7 @@ public:
 	}
 
 	void AddPoint(f cX, f cY) {
-		if (nVertices >= 20) return;
+		if (nVertices >= max_size) return;
 
 		V4 wVertex = V4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
 		// fill interleaved data
@@ -261,10 +262,10 @@ public:
 		nVertices++;
 		// copy data to the GPU
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);	// fix!!
-		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(f), vertexData, GL_DYNAMIC_DRAW);
 	}
 
-	void Draw(M4 M) const {
+	void Draw(M4 M = M4::I()) const {
 		if (nVertices > 0) {
 			M4 MVPTransform = M * camera.V() * camera.P();
 
@@ -273,33 +274,30 @@ public:
 			else printf("uniform MVP cannot be set\n");
 
 			glBindVertexArray(vao);
-			glDrawArrays(GL_TRIANGLE_FAN, 0, nVertices);
+			glDrawArrays(draw_mode, 0, nVertices);
 		}
 	}
 };
 
-template <int size, typename type>
+template <int max_size, typename type>
 class Ring {
-	type container[size];
-	int actualSize;
+	type cont[max_size];
+	int size;
 public:
-	Ring() : actualSize(0) { }
+	Ring() : size(0) { }
 	type& operator[](const int i) {
-		if (0 <= i)
-			return container[i % actualSize];
-		else
-			return container[(i + 1) % actualSize + actualSize - 1];
+		return 0 <= i ? cont[i % size] : cont[(i + 1) % size + size - 1];
 	}
 	void Push(const type& elem) {
-		if (actualSize < size)
-			container[actualSize++] = elem;
+		if (size < max_size)
+			cont[size++] = elem;
 	}
-	int GetActualSize() { return actualSize; }
+	int GetActualSize() { return size; }
 };
 
 class CatmullRom {
 	Ring<20, V4> r;
-	Ring<20, f> t;	// stores the first time as a last element too!
+	Ring<20, f> t;
 	int n;
 
 	// these may be const lambdas, capturing time or index... (is it possible? when capture happens?)
@@ -350,21 +348,20 @@ class CatmullRom {
 	}
 
 public:
-	CatmullRom() : n(0) {
+	CatmullRom() : n(0) {	// sample data....
 		r.Push(V4(1, 1));
-		r.Push(V4(4.52, -6.5));
-		r.Push(V4(-0.52, -0.5));
-		r.Push(V4(-0.5, 0.5));
-
-		t.Push(0);
+		r.Push(V4(1, -1));
+		r.Push(V4(-1, -1));
+		r.Push(V4(-1, 1));
+		
 		t.Push(2.1);
 		t.Push(3.1);
 		t.Push(4.1);
+		t.Push(6.9);
 		n = r.GetActualSize();
-
 	}
-/*
-	void AddPoint(const V4& point) {
+
+/*	void AddPoint(const V4& point) {
 		if (n == 20)
 			return;
 		r[n++] = point;
@@ -378,48 +375,53 @@ public:
 
 		t[n] = glutGet(GLUT_ELAPSED_TIME) - start;
 		n++;
-	}
-*/
+	}*/
+
 	V4 GetPlace(long time_ms) {
-		// save the starting time in ms
-		static long startTime_ms = time_ms;
+		static long startTime_ms = time_ms;		// save the starting time in ms
 		long elapsed = time_ms - startTime_ms;
 
-		// the period is the last time of point
-		long period = t[n - 1] * 1000;
+		long period = t[n - 1] * 1000;			// the period is the last time of point
 
-		// calculate current time in period
-		long period_elapsed = elapsed % period;
+		long period_elapsed = elapsed % period;	// calculate current time in period
+		
+		f time = period_elapsed / 1000.0;		// change ms to s
+		
+		int i = index(time);					// get point index from time
 
-		// change ms to s
-		f time = period_elapsed / 1000.0;
-
-		// get point index from time
-		int i = index(time);
-
-		// return with position calculated by the time
-		return 		
-					(pow(time - t[i], 3) * a3(i)) 
-								+ 
-					(pow(time - t[i], 2) * a2(i)) 
-								+ 
-					((time - t[i]) * v(i))
-								+
-					r[i]							
-			;
+		return 	(pow(time - t[i], 3) * a3(i))	// return with position calculated by the time
+							+ 
+				(pow(time - t[i], 2) * a2(i)) 
+							+ 
+				((time - t[i]) * v(i))
+							+
+				r[i];
 	}
 
+	void Draw() {
+		int resolution = 5;
+		LineStrip<10000, GL_LINE_STRIP> line;
+		line.Create();
+
+		float t_max = t[n - 1];	// az utolsó elem max!
+
+		for (float f = 0; f < t_max; f += 1000 / resolution) {
+			int i = index(f);
+			V4 point = (pow(f - t[i], 3) * a3(i)) + (pow(f - t[i], 2) * a2(i)) + ((f - t[i]) * v(i)) + r[i];
+			line.AddPoint(point[0], point[1]);
+		}
+
+		line.Draw();
+	}
 };
 
 class Star {
-	LineStrip line;
+	LineStrip<20, GL_TRIANGLE_FAN> line;
 	V4 position;
 	f size, defaultSize, angle, shininess;
 	long startTime, scale_length, rotation_length, timeShift;
 	int numberOfVertices;
 	Star* CoG;
-
-
 
 public:
 	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0),
@@ -464,7 +466,7 @@ public:
 		size = defaultSize + scale_pulse / 100.0;
 		angle = rotation_pulse / 5.0;
 
-		// TODO: update position!
+		// TODO: update position! (Newton!)
 	}
 
 	void Draw() const {
@@ -475,11 +477,14 @@ public:
 class CatmullStar : public Star {
 	CatmullRom cr;
 public:
-	void Animate(long int time) {
-		// pulzál és forog
-		Star::Animate(time);
-		SetPosition(cr.GetPlace(time));
-		// Catmulltól megkérdezi az új pozíciót
+	void Animate(long int time) {	
+		Star::Animate(time);			// pulzál és forog
+		SetPosition(cr.GetPlace(time));	// Catmulltól megkérdezi az új pozíciót
+	}
+
+	void Draw() {
+		Star::Draw();	// kirajzolja magát
+		cr.Draw();		// kirajzolja a görbét is
 	}
 };
 
@@ -513,7 +518,6 @@ public:
 	}
 };
 
-// The virtual world: collection of two objects
 Scene scene;
 
 // Initialization, create an OpenGL context
