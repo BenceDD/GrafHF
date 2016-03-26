@@ -278,9 +278,28 @@ public:
 	}
 };
 
+template <int size, typename type>
+class Ring {
+	type container[size];
+	int actualSize;
+public:
+	Ring() : actualSize(0) { }
+	type& operator[](const int i) {
+		if (0 <= i)
+			return container[i % actualSize];
+		else
+			return container[(i + 1) % actualSize + actualSize - 1];
+	}
+	void Push(const type& elem) {
+		if (actualSize < size)
+			container[actualSize++] = elem;
+	}
+	int GetActualSize() { return actualSize; }
+};
+
 class CatmullRom {
-	V4 r[20];	// stores the first point as a last element too!
-	f t[20];	// stores the first time as a last element too!
+	Ring<20, V4> r;
+	Ring<20, f> t;	// stores the first time as a last element too!
 	int n;
 
 	// these may be const lambdas, capturing time or index... (is it possible? when capture happens?)
@@ -325,25 +344,24 @@ class CatmullRom {
 	}
 
 	int index(float time) {
-		for (int i = 1; i < n; i++)
+		for (int i = 0; i < n; i++)
 			if (t[i] >= time)
-				return i;
+				return i -1;
 	}
 
 public:
 	CatmullRom() : n(0) {
-		r[0] = V4(0.5, 0.5);
-		r[1] = V4(0.52, -0.5);
-		r[2] = V4(-0.52, -0.5);
-		r[3] = V4(-0.5, 0.5);
-		r[4] = V4(0.5, 0.5);
+		r.Push(V4(1, 1));
+		r.Push(V4(4.52, -6.5));
+		r.Push(V4(-0.52, -0.5));
+		r.Push(V4(-0.5, 0.5));
 
-		t[0] = 0;
-		t[1] = 2.1;
-		t[2] = 3.1;
-		t[3] = 4.1;
-		t[4] = 5.1;
-		n = 5;
+		t.Push(0);
+		t.Push(2.1);
+		t.Push(3.1);
+		t.Push(4.1);
+		n = r.GetActualSize();
+
 	}
 /*
 	void AddPoint(const V4& point) {
@@ -599,8 +617,8 @@ void onIdle() {
 // Idaig modosithatod...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
+
 int main(int argc, char * argv[]) {
-	
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
@@ -636,7 +654,7 @@ int main(int argc, char * argv[]) {
 
 	glutMainLoop();
 	onExit();
-
+	
 	return 1;
 }
 
