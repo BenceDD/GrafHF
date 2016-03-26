@@ -279,8 +279,8 @@ public:
 };
 
 class CatmullRom {
-	V4 r[20];
-	f t[20];
+	V4 r[20];	// stores the first point as a last element too!
+	f t[20];	// stores the first time as a last element too!
 	int n;
 	const int resolution;
 
@@ -288,34 +288,73 @@ class CatmullRom {
 	V4 v(const int i) {
 		if (i == 0 || n - 2)
 			return V4(0, 0);
-		return ((r[i + 1] - r[i]) / (t[i + 1] - t[i]) + (r[i] - r[i - 1]) / (t[i] - t[i - 1])) / 2;
+		return	(	
+					(r[i + 1] - r[i]) 
+							/ 
+					(t[i + 1] - t[i]) 
+
+							+ 
+
+					(r[i] - r[i - 1]) 
+							/
+					(t[i] - t[i - 1])
+				) 
+				/
+				2;
 	}
 
 	V4 a2(const int i) {
-		return ((3 * (r[i + 1] - r[i])) / pow(t[i + 1] - t[i], 2)) - ((v(i + 1) + (2 * v(i))) / (t[i + 1] - t[i]));
+		return		((3 * (r[i + 1] - r[i])) 
+							/ 
+					pow(t[i + 1] - t[i], 2)	) 
+
+							-
+
+					((v(i + 1) + (2 * v(i))) 
+							/
+					(t[i + 1] - t[i]));
 	}
 
 	V4 a3(const int i) {
-		return ((2 * (r[i] - r[i + 1])) / pow(t[i + 1] - t[i], 3)) + ((v(i + 1) + v(i)) / pow(t[i + 1] - t[i], 2));
+		return		((2 * (r[i] - r[i + 1])) 
+							/ 
+					pow(t[i + 1] - t[i], 3)) 
+
+							+ 
+
+					((v(i + 1) + v(i)) 
+							/ 
+					pow(t[i + 1] - t[i], 2));
 	}
 
-	// have to go around by cycle...
 	int index(float time) {
-		int i;
-		for (i = 1; i < n; i++)
+		for (int i = 1; i < n; i++)
 			if (t[i] > time)
-				return i - 1;
+				return i;
 	}
 
 public:
-	CatmullRom() : n(0), resolution(20) {}
+	CatmullRom() : n(0), resolution(20) {
+		r[0] = V4(0.5, 0.5);
+		r[1] = V4(0.52, -0.5);
+		r[2] = V4(-0.52, -0.5);
+		r[3] = V4(-0.5, 0.5);
+		r[4] = V4(0.5, 0.5);
 
+		t[0] = 0;
+		t[1] = 2.1;
+		t[2] = 3.1;
+		t[3] = 4.1;
+		t[4] = 5.1;
+		n = 5;
+	}
+/*
 	void AddPoint(const V4& point) {
 		if (n == 20)
 			return;
 		r[n++] = point;
 	}
-
+	
 	void addTime() {
 		if (n == 20)
 			return;
@@ -325,22 +364,26 @@ public:
 		t[n] = glutGet(GLUT_ELAPSED_TIME) - start;
 		n++;
 	}
+*/
+	V4 GetPlace(long _time) {
+		static long startTime = _time;
+		long elasped = _time - startTime + 1;
 
-	V4 GetPlace
+		long int_time = elasped % (int) (t[n - 1] * 1000);
+		f time = int_time / 1000.0;
 
-		void Draw() {
-		if (n < 2)
-			return;
-
-		glBegin(GL_LINE_STRIP);
-		glColor3f(0.f, 1.f, 0.f);
-		float t_max = t[n - 1];
-		for (float f = 0; f < t_max; f += 1000 / resolution) {
-			int i = index(f);
-			((pow(f - t[i], 3) * a3(i)) + (pow(f - t[i], 2) * a2(i)) + ((f - t[i]) * v(i)) + r[i]);	// ???
-		}
-		glEnd();
+		int i = index(time);
+		return 		
+					(pow(time - t[i], 3) * a3(i)) 
+								+ 
+					(pow(time - t[i], 2) * a2(i)) 
+								+ 
+					((time - t[i]) * v(i))
+								+
+					r[i]							
+			;
 	}
+
 };
 
 class Star {
@@ -387,8 +430,7 @@ public:
 	}
 
 	void Animate(long time) {
-		if (startTime == 0)	// first call
-			startTime = time;
+		static long StartTime = time;
 
 		long duration = time - startTime + timeShift;
 		f scale_pulse = sinf((duration % scale_length) / (float)scale_length * M_PI * 2.0);
@@ -406,11 +448,12 @@ public:
 };
 
 class CatmullStar : public Star {
+	CatmullRom cr;
 public:
 	void Animate(long int time) {
 		// pulzál és forog
 		Star::Animate(time);
-
+		SetPosition(cr.GetPlace(time));
 		// Catmulltól megkérdezi az új pozíciót
 	}
 };
@@ -550,6 +593,7 @@ void onIdle() {
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 int main(int argc, char * argv[]) {
+	
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
@@ -585,6 +629,7 @@ int main(int argc, char * argv[]) {
 
 	glutMainLoop();
 	onExit();
+
 	return 1;
 }
 
