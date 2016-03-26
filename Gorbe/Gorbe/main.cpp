@@ -282,12 +282,9 @@ class CatmullRom {
 	V4 r[20];	// stores the first point as a last element too!
 	f t[20];	// stores the first time as a last element too!
 	int n;
-	const int resolution;
 
 	// these may be const lambdas, capturing time or index... (is it possible? when capture happens?)
 	V4 v(const int i) {
-		if (i == 0 || n - 2)
-			return V4(0, 0);
 		return	(	
 					(r[i + 1] - r[i]) 
 							/ 
@@ -299,8 +296,8 @@ class CatmullRom {
 							/
 					(t[i] - t[i - 1])
 				) 
-				/
-				2;
+						/
+							2;
 	}
 
 	V4 a2(const int i) {
@@ -329,12 +326,12 @@ class CatmullRom {
 
 	int index(float time) {
 		for (int i = 1; i < n; i++)
-			if (t[i] > time)
+			if (t[i] >= time)
 				return i;
 	}
 
 public:
-	CatmullRom() : n(0), resolution(20) {
+	CatmullRom() : n(0) {
 		r[0] = V4(0.5, 0.5);
 		r[1] = V4(0.52, -0.5);
 		r[2] = V4(-0.52, -0.5);
@@ -365,14 +362,24 @@ public:
 		n++;
 	}
 */
-	V4 GetPlace(long _time) {
-		static long startTime = _time;
-		long elasped = _time - startTime + 1;
+	V4 GetPlace(long time_ms) {
+		// save the starting time in ms
+		static long startTime_ms = time_ms;
+		long elapsed = time_ms - startTime_ms;
 
-		long int_time = elasped % (int) (t[n - 1] * 1000);
-		f time = int_time / 1000.0;
+		// the period is the last time of point
+		long period = t[n - 1] * 1000;
 
+		// calculate current time in period
+		long period_elapsed = elapsed % period;
+
+		// change ms to s
+		f time = period_elapsed / 1000.0;
+
+		// get point index from time
 		int i = index(time);
+
+		// return with position calculated by the time
 		return 		
 					(pow(time - t[i], 3) * a3(i)) 
 								+ 
