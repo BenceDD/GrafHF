@@ -300,45 +300,16 @@ class CatmullRom {
 	Ring<20, f> t;
 	int n;
 
-	// these may be const lambdas, capturing time or index... (is it possible? when capture happens?)
 	V4 v(const int i) {
-		return	(	
-					(r[i + 1] - r[i]) 
-							/ 
-					(t[i + 1] - t[i]) 
-
-							+ 
-
-					(r[i] - r[i - 1]) 
-							/
-					(t[i] - t[i - 1])
-				) 
-						/
-							2;
+		return ((r[i + 1] - r[i]) / (t[i + 1] - t[i]) + (r[i] - r[i - 1]) / (t[i] - t[i - 1])) / 2.0f;
 	}
 
 	V4 a2(const int i) {
-		return		((3 * (r[i + 1] - r[i])) 
-							/ 
-					pow(t[i + 1] - t[i], 2)	) 
-
-							-
-
-					((v(i + 1) + (2 * v(i))) 
-							/
-					(t[i + 1] - t[i]));
+		return ((3.0f * (r[i + 1] - r[i])) / pow(t[i + 1] - t[i], 2)) - ((v(i + 1) + (2 * v(i))) / (t[i + 1] - t[i]));
 	}
 
 	V4 a3(const int i) {
-		return		((2 * (r[i] - r[i + 1])) 
-							/ 
-					pow(t[i + 1] - t[i], 3)) 
-
-							+ 
-
-					((v(i + 1) + v(i)) 
-							/ 
-					pow(t[i + 1] - t[i], 2));
+		return ((2.0f * (r[i] - r[i + 1])) / pow(t[i + 1] - t[i], 3)) + ((v(i + 1) + v(i)) / pow(t[i + 1] - t[i], 2));
 	}
 
 	int index(float time) {
@@ -347,67 +318,52 @@ class CatmullRom {
 				return i -1;
 	}
 
+	V4 GetPoint(const f time) {
+		int i = index(time);
+		return (pow(time - t[i], 3) * a3(i)) + (pow(time - t[i], 2) * a2(i)) + ((time - t[i]) * v(i)) + r[i];
+	}
+
 public:
 	CatmullRom() : n(0) {	// sample data....
-		r.Push(V4(1, 1));
-		r.Push(V4(1, -1));
-		r.Push(V4(-1, -1));
-		r.Push(V4(-1, 1));
-		
+		r.Push(V4(0.3, 0));
+		r.Push(V4(0.5, 0.5));
+		r.Push(V4(0.5, -0.5));
+		r.Push(V4(-0.5, -0.5));
+		r.Push(V4(0.3, 0));
+		r.Push(V4(0.3, 0));
+
+		t.Push(0);
 		t.Push(2.1);
 		t.Push(3.1);
 		t.Push(4.1);
 		t.Push(6.9);
+		t.Push(7.9);
 		n = r.GetActualSize();
 	}
 
-/*	void AddPoint(const V4& point) {
-		if (n == 20)
-			return;
-		r[n++] = point;
+	void AddPoint(const V4& point, const long& time) {
+		// add spline properties here.
 	}
-	
-	void addTime() {
-		if (n == 20)
-			return;
 
-		static long start = glutGet(GLUT_ELAPSED_TIME);
+	V4 GetPosition(long abs_time) {
+		static long startTime = abs_time;
+		// a bejárás összes ideje [s]
+		f duration = t[t.GetActualSize() - 1] - t[0];
+		// a bejárás pillanatnyi ideje [ms]
+		long state_ms = (abs_time - startTime) % (int)(duration * 1000);
 
-		t[n] = glutGet(GLUT_ELAPSED_TIME) - start;
-		n++;
-	}*/
-
-	V4 GetPlace(long time_ms) {
-		static long startTime_ms = time_ms;		// save the starting time in ms
-		long elapsed = time_ms - startTime_ms;
-
-		long period = t[n - 1] * 1000;			// the period is the last time of point
-
-		long period_elapsed = elapsed % period;	// calculate current time in period
-		
-		f time = period_elapsed / 1000.0;		// change ms to s
-		
-		int i = index(time);					// get point index from time
-
-		return 	(pow(time - t[i], 3) * a3(i))	// return with position calculated by the time
-							+ 
-				(pow(time - t[i], 2) * a2(i)) 
-							+ 
-				((time - t[i]) * v(i))
-							+
-				r[i];
+		return GetPoint(state_ms / 1000.0f);
 	}
 
 	void Draw() {
-		int resolution = 5;
-		LineStrip<10000, GL_LINE_STRIP> line;
+		int resolution = 50;
+		LineStrip<1000, GL_LINE_STRIP> line;
 		line.Create();
 
-		float t_max = t[n - 1];	// az utolsó elem max!
+		float t_max = t[t.GetActualSize() - 1];	// az utolsó elem max!
 
-		for (float f = 0; f < t_max; f += 1000 / resolution) {
-			int i = index(f);
-			V4 point = (pow(f - t[i], 3) * a3(i)) + (pow(f - t[i], 2) * a2(i)) + ((f - t[i]) * v(i)) + r[i];
+		for (float f = t[0]; f < t_max; f += (t_max - t[0]) / resolution) {
+			V4 point = GetPoint(f);
 			line.AddPoint(point[0], point[1]);
 		}
 
@@ -477,9 +433,9 @@ public:
 class CatmullStar : public Star {
 	CatmullRom cr;
 public:
-	void Animate(long int time) {	
-		Star::Animate(time);			// pulzál és forog
-		SetPosition(cr.GetPlace(time));	// Catmulltól megkérdezi az új pozíciót
+	void Animate(long time) {	
+		Star::Animate(time);				// pulzál és forog
+		SetPosition(10 * cr.GetPosition(time));	// Catmulltól megkérdezi az új pozíciót
 	}
 
 	void Draw() {
@@ -620,9 +576,8 @@ void onIdle() {
 
 // Idaig modosithatod...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-
 int main(int argc, char * argv[]) {
+
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
@@ -659,6 +614,7 @@ int main(int argc, char * argv[]) {
 	glutMainLoop();
 	onExit();
 	
+
 	return 1;
 }
 
