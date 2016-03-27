@@ -1,3 +1,37 @@
+//=============================================================================================
+// Szamitogepes grafika hazi feladat keret. Ervenyes 2016-tol.
+// A //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// sorokon beluli reszben celszeru garazdalkodni, mert a tobbit ugyis toroljuk.
+// A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat.
+// Tilos:
+// - mast "beincludolni", illetve mas konyvtarat hasznalni
+// - faljmuveleteket vegezni a printf-et kivéve
+// - new operatort hivni a lefoglalt adat korrekt felszabaditasa nelkul
+// - felesleges programsorokat a beadott programban hagyni
+// - felesleges kommenteket a beadott programba irni a forrasmegjelolest kommentjeit kiveve
+// ---------------------------------------------------------------------------------------------
+// A feladatot ANSI C++ nyelvu forditoprogrammal ellenorizzuk, a Visual Studio-hoz kepesti elteresekrol
+// es a leggyakoribb hibakrol (pl. ideiglenes objektumot nem lehet referencia tipusnak ertekul adni)
+// a hazibeado portal ad egy osszefoglalot.
+// ---------------------------------------------------------------------------------------------
+// A feladatmegoldasokban csak olyan OpenGL fuggvenyek hasznalhatok, amelyek az oran a feladatkiadasig elhangzottak 
+//
+// NYILATKOZAT
+// ---------------------------------------------------------------------------------------------
+// Nev    : Mikulas Bence
+// Neptun : G8MZZ1
+// ---------------------------------------------------------------------------------------------
+// ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
+// mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
+// A forrasmegjeloles kotelme vonatkozik az eloadas foliakat es a targy oktatoi, illetve a
+// grafhazi doktor tanacsait kiveve barmilyen csatornan (szoban, irasban, Interneten, stb.) erkezo minden egyeb
+// informaciora (keplet, program, algoritmus, stb.). Kijelentem, hogy a forrasmegjelolessel atvett reszeket is ertem,
+// azok helyessegere matematikai bizonyitast tudok adni. Tisztaban vagyok azzal, hogy az atvett reszek nem szamitanak
+// a sajat kontribucioba, igy a feladat elfogadasarol a tobbi resz mennyisege es minosege alapjan szuletik dontes.
+// Tudomasul veszem, hogy a forrasmegjeloles kotelmenek megsertese eseten a hazifeladatra adhato pontokat
+// negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
+//=============================================================================================
+
 #define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stdlib.h>
@@ -19,7 +53,6 @@ const unsigned int windowWidth = 600, windowHeight = 600;
 
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Innentol modosithatod...
-
 
 // OpenGL major and minor versions
 int majorVersion = 3, minorVersion = 0;
@@ -196,43 +229,28 @@ V4 operator*(const V4& vec, const M4& mat) {
 	return result;
 }
 
-class CatmullStar;
-//V4 CatmullStar::GetPosition();
 // 2D camera
 struct Camera {
 	f wCx, wCy;	// center in world coordinates
 	f wWx, wWy;	// width and height in world coordinates
-	CatmullStar* cs;
 public:
-	Camera() { Animate(0); cs = nullptr; }
+	Camera() { Animate(0); }
 
-	// view matrix: translates the center to the origin
 	M4 V() const { return M4::I().Translate(V4(-wCx, -wCy)); }
-
-	// projection matrix: scales it to be a square of edge length 2
 	M4 P() const { return M4::I().Scale(V4(2 / wWx, 2 / wWy, 1)); }
-
-	// inverse view matrix
 	M4 Vinv() const { return M4::I().Translate(V4(wCx, wCy, 1)); }
-
-	// inverse projection matrix
 	M4 Pinv() const { return M4::I().Scale(V4(wWx / 2, wWy / 2, 1)); }
 
 	void Animate(f t) {
-		wCx = 0;//10 * cosf(t);
+		wCx = 0;
 		wCy = 0;
 		wWx = 20;
 		wWy = 20;
-		if (cs != nullptr) {
-			//V4 starPos = cs->GetPosition();
-			//wCx = starPos[0];
-			//wCy = starPos[1];
-		}
 	}
 
-	void SetCenter(f _wCx, f _wCy) {
-		wCx = _wCx;
-		wCy = _wCy;
+	void SetCenter(const V4& cntr) {
+		wCx = cntr.v[0];
+		wCy = cntr.v[1];
 	}
 };
 
@@ -277,15 +295,15 @@ public:
 		if (nVertices >= max_size) return;
 
 		V4 wVertex = V4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
-		// fill interleaved data
+
 		vertexData[5 * nVertices] = wVertex.v[0];
 		vertexData[5 * nVertices + 1] = wVertex.v[1];
 		vertexData[5 * nVertices + 2] = 1; // red
 		vertexData[5 * nVertices + 3] = 1; // green
 		vertexData[5 * nVertices + 4] = 0; // blue
 		nVertices++;
-		// copy data to the GPU
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);	// fix!!
+
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(f), vertexData, GL_DYNAMIC_DRAW);
 	}
 
@@ -344,17 +362,14 @@ class CatmullRom {
 	int n;
 
 	V4 v(const int i) {
-		//return ((r[i + 1] - r[i]) / (t[i + 1] - t[i]) + (r[i] - r[i - 1]) / (t[i] - t[i - 1])) / 2.0f;
 		return ((r[i + 1] - r[i]) / (t.monInc(i + 1) - t.monInc(i)) + (r[i] - r[i - 1]) / (t.monInc(i) - t.monInc(i - 1))) * 0.9f;
 	}
 
 	V4 a2(const int i) {
-		//return ((3.0f * (r[i + 1] - r[i])) / pow(t[i + 1] - t[i], 2)) - ((v(i + 1) + (2 * v(i))) / (t[i + 1] - t[i]));
 		return ((3.0f * (r[i + 1] - r[i])) / pow(t.monInc(i + 1) - t.monInc(i), 2)) - ((v(i + 1) + (2 * v(i))) / (t.monInc(i + 1) - t.monInc(i)));
 	}
 
 	V4 a3(const int i) {
-		//return ((2.0f * (r[i] - r[i + 1])) / pow(t[i + 1] - t[i], 3)) + ((v(i + 1) + v(i)) / pow(t[i + 1] - t[i], 2));
 		return ((2.0f * (r[i] - r[i + 1])) / pow(t.monInc(i + 1) - t.monInc(i), 3)) + ((v(i + 1) + v(i)) / pow(t.monInc(i + 1) - t.monInc(i), 2));
 	}
 
@@ -367,29 +382,13 @@ class CatmullRom {
 	V4 GetPoint(const f time) {
 		if (n >= 3) {
 			int i = index(time);
-			//return (pow(time - t[i], 3) * a3(i)) + (pow(time - t[i], 2) * a2(i)) + ((time - t[i]) * v(i)) + r[i];
 			return (pow(time - t.monInc(i), 3) * a3(i)) + (pow(time - t.monInc(i), 2) * a2(i)) + ((time - t.monInc(i)) * v(i)) + r[i];
 		}
 		return V4();
 	}
 
 public:
-	CatmullRom() : n(0) {	// sample data....
-							//r.Push(V4(0.3, 0));
-							//r.Push(V4(5, 5));
-							//r.Push(V4(5, -5));
-							//r.Push(V4(-5, -5));
-							//r.Push(V4(3, 0));
-							//r.Push(V4(0.3, 0));
-
-							//t.Push(0);
-							//t.Push(2.1);
-							//t.Push(3.1);
-							//t.Push(4.1);
-							//t.Push(6.9);
-							//t.Push(7.9);
-		n = r.GetActualSize();
-	}
+	CatmullRom() : n(0) { }
 
 	void AddPoint(const V4& point, const long& time) {
 		r.Push(point);
@@ -400,14 +399,11 @@ public:
 	V4 GetPosition(long abs_time) {
 		if (n >= 3) {
 			static long startTime = abs_time;
-			// a bejárás összes ideje [s]
 			f duration = (t[t.GetActualSize() - 1] - t[0]) * (t.GetActualSize() + 1) / t.GetActualSize();
-			// a bejárás pillanatnyi ideje [ms]
 			long state_ms = (abs_time - startTime) % (int) (duration * 1000);
-
 			return GetPoint(t[0] + (state_ms / 1000.0f));
-		}
-		return V4();
+		} else
+			return V4();
 	}
 
 	void Draw() {
@@ -416,7 +412,7 @@ public:
 			LineStrip<1000, GL_LINE_STRIP> line;
 			line.Create();
 
-			float t_max = t[t.GetActualSize() - 1];	// az utolsó elem max!
+			float t_max = t[t.GetActualSize() - 1];	
 			float around = (t_max - t[0]);
 
 			for (float f = t[0]; f <= t_max + (around / (float) n)*1.1f; f += around / resolution) {
@@ -424,27 +420,27 @@ public:
 				line.AddPoint(point[0], point[1]);
 			}
 
-			line.Draw(M4::I()*camera.V()*camera.P());
+			line.Draw(M4::I() * camera.V() * camera.P());
 		}
 	}
 };
 
 class Star {
 	LineStrip<20, GL_TRIANGLE_FAN> line;
-	V4 position;
-	V4 velocity;
-	V4 acceleration;
+	V4 position, velocity, acceleration;
 	f size, defaultSize, angle, shininess;
 	long startTime, scale_length, rotation_length, timeShift;
 	int numberOfVertices;
 	Star* CoG;
 
+protected:
+	V4 color;
+
 public:
 	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0),
-		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertices(7) {
-		velocity = V4(0, 0, 0, 0);
-		acceleration = V4(0, 0, 0, 0);
-	}
+		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertices(7), 
+		velocity(V4(0, 0, 0, 0)), acceleration(V4(0, 0, 0, 0)), color(V4(0.5, 0.5, 0.5, 0)) { }
+
 	Star& SetPosition(V4 _position) { position = _position; return *this; }
 	Star& SetShininess(f _shininess) { shininess = _shininess; return *this; }
 	Star& SetSize(f _size) { defaultSize = _size; return *this; }
@@ -485,40 +481,40 @@ public:
 		angle = rotation_pulse / 5.0;
 
 		if (CoG != nullptr) {
-			//time 0.1 sec
-			float Mcat = 10;
-			float M = 10;
-			float g = 0.00001;
+			f Mcat = 10;
+			f M = 10;
+			f g = 0.00001;
 
 			V4 dir = CoG->GetPosition() - position;
-			float rr = dir * dir;
-			//F   = m*a
-			//F/m = a
-			acceleration = dir*Mcat*g / rr;
-
-			velocity = velocity + acceleration*0.1;
-
+			f rr = dir * dir;
+			acceleration = dir * Mcat * g / rr;
+			velocity = velocity + acceleration * 0.1;
 			position = position + velocity*0.1;
 		}
 
 	}
 
 	void Draw() const {
-		line.Draw(M4::I().Scale(V4(size, size)).RotateZ(angle).Translate(position));
+		line.Draw(M4::I().Scale(V4(size, size)).RotateZ(angle).Translate(position), color);
 	}
 };
 
 class CatmullStar : public Star {
 	CatmullRom cr;
 public:
+
+	CatmullStar() {
+		color = V4(1, 1, 1, 1);
+	}
+
 	void Animate(long time) {
-		Star::Animate(time);					// pulzál és forog
-		SetPosition(1 * cr.GetPosition(time));	// Catmulltól megkérdezi az új pozíciót
+		Star::Animate(time);	
+		SetPosition(1 * cr.GetPosition(time));
 	}
 
 	void Draw() {
-		Star::Draw();	// kirajzolja magát
-		cr.Draw();		// kirajzolja a görbét is
+		Star::Draw();
+		cr.Draw();
 	}
 
 	CatmullRom* GetCatmullLine() {
@@ -535,9 +531,9 @@ struct Scene {
 
 	void Create() {
 		// create the objects
-		brightest.SetNumberOfVertices(5).Create();
-		star1.SetNumberOfVertices(5).Create();
-		star2.SetNumberOfVertices(5).Create();
+		brightest.Create();
+		star1.Create();
+		star2.Create();
 
 		// set positions and gravity
 		brightest.SetPosition(V4(-2, -5)).SetSize(0.15).SetAnimationParameters(1500);
@@ -635,10 +631,8 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	if (!cameraLocked) {
-		V4 pos = scene.brightest.GetPosition();
-		camera.SetCenter(pos[0], pos[1]);
-	}
+	if (!cameraLocked) 
+		camera.SetCenter(scene.brightest.GetPosition());
 
 	scene.Draw();
 	glutSwapBuffers();									// exchange the two buffers
@@ -657,15 +651,15 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 // Mouse click event
 void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
+
 		f cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 		f cY = 1.0f - 2.0f * pY / windowHeight;
 		V4 click = V4(cX, cY, 0, 1);
 		click = click*(camera.Vinv()*camera.Pinv());
-		//lineStrip.AddPoint(cX, cY);
-		//lineStrip2.AddPoint(cY, cX);
 		cX = click[0];
 		cY = click[1];
 		scene.AddPoint(V4(cX, cY));
+
 		glutPostRedisplay();     // redraw
 	}
 }
@@ -684,8 +678,8 @@ void onIdle() {
 
 // Idaig modosithatod...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-int main(int argc, char * argv[]) {
 
+int main(int argc, char * argv[]) {
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
@@ -721,8 +715,6 @@ int main(int argc, char * argv[]) {
 
 	glutMainLoop();
 	onExit();
-
-
 	return 1;
 }
 
