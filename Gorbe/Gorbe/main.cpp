@@ -234,23 +234,20 @@ struct Camera {
 	f wCx, wCy;	// center in world coordinates
 	f wWx, wWy;	// width and height in world coordinates
 public:
-	Camera() { Animate(0); }
+	bool locked;
+
+	Camera() : wCx(0), wCy(0), wWx(20), wWy(20), locked(true) { }
 
 	M4 V() const { return M4::I().Translate(V4(-wCx, -wCy)); }
 	M4 P() const { return M4::I().Scale(V4(2 / wWx, 2 / wWy, 1)); }
 	M4 Vinv() const { return M4::I().Translate(V4(wCx, wCy, 1)); }
 	M4 Pinv() const { return M4::I().Scale(V4(wWx / 2, wWy / 2, 1)); }
 
-	void Animate(f t) {
-		wCx = 0;
-		wCy = 0;
-		wWx = 20;
-		wWy = 20;
-	}
-
 	void SetCenter(const V4& cntr) {
-		wCx = cntr.v[0];
-		wCy = cntr.v[1];
+		if (!locked) {
+			wCx = cntr.v[0];
+			wCy = cntr.v[1];
+		}
 	}
 };
 
@@ -332,10 +329,12 @@ protected:
 	type cont[max_size];
 	int size;
 public:
-	Ring() : size(0) {}
+	Ring() : size(0) { }
+
 	type& operator[](const int i) {
 		return 0 <= i ? cont[i % size] : cont[(i + 1) % size + size - 1];
 	}
+
 	type monInc(const int i) {
 		int circlesAround = i / size;
 		if (i < 0) circlesAround--;
@@ -349,10 +348,12 @@ public:
 
 		return cont[idxInCircle] + circlesAround * circle;
 	}
+
 	void Push(const type& elem) {
 		if (size < max_size)
 			cont[size++] = elem;
 	}
+
 	int GetActualSize() { return size; }
 };
 
@@ -427,8 +428,8 @@ public:
 
 class Star {
 	LineStrip<20, GL_TRIANGLE_FAN> line;
-	V4 position, velocity, acceleration;
-	f size, defaultSize, angle, shininess;
+	V4 velocity, acceleration;
+	f size, angle;
 	long startTime, scale_length, rotation_length, timeShift;
 	int numberOfVertices;
 	Star* CoG;
@@ -437,22 +438,22 @@ protected:
 	V4 color;
 
 public:
-	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), shininess(1), startTime(0),
+	V4 position;
+	f defaultSize;
+
+	Star() : CoG(nullptr), size(1), defaultSize(1), angle(0), startTime(0),
 		timeShift(0), scale_length(3000), rotation_length(6000), numberOfVertices(7), 
 		velocity(V4(0, 0, 0, 0)), acceleration(V4(0, 0, 0, 0)), color(V4(0.5, 0.5, 0.5, 0)) { }
 
 	Star& SetPosition(V4 _position) { position = _position; return *this; }
-	Star& SetShininess(f _shininess) { shininess = _shininess; return *this; }
 	Star& SetSize(f _size) { defaultSize = _size; return *this; }
 	Star& SetCenterOfGravity(Star* _star) { CoG = _star; return *this; }
-	Star& SetNumberOfVertices(int n) { numberOfVertices = n; return *this; }
 	Star& SetAnimationParameters(long _shift = 0, long _scale_length = 3000, long _rotation_length = 6000) {
 		timeShift = _shift;
 		scale_length = _scale_length;
 		rotation_length = _rotation_length;
 		return *this;
 	}
-	V4 GetPosition() { return position; }
 
 	void Create() {
 		line.Create();
@@ -481,17 +482,15 @@ public:
 		angle = rotation_pulse / 5.0;
 
 		if (CoG != nullptr) {
-			f Mcat = 10;
-			f M = 10;
+			f Mcat = CoG->size * 100;
 			f g = 0.00001;
 
-			V4 dir = CoG->GetPosition() - position;
+			V4 dir = CoG->position - position;
 			f rr = dir * dir;
 			acceleration = dir * Mcat * g / rr;
 			velocity = velocity + acceleration * 0.1;
-			position = position + velocity*0.1;
+			position = position + velocity * 0.1;
 		}
-
 	}
 
 	void Draw() const {
@@ -517,15 +516,14 @@ public:
 		cr.Draw();
 	}
 
-	CatmullRom* GetCatmullLine() {
-		return &cr;
+	void AddPoint(const V4& point, const long& time) {
+		cr.AddPoint(point, time);
 	}
 };
 
 struct Scene {
 	CatmullStar brightest;
 	Star star1, star2;
-	CatmullRom* cr;
 
 	long lastSimulatedTime;
 
@@ -539,8 +537,6 @@ struct Scene {
 		brightest.SetPosition(V4(-2, -5)).SetSize(0.15).SetAnimationParameters(1500);
 		star1.SetPosition(V4(0, 5)).SetSize(0.1).SetCenterOfGravity(&brightest).SetAnimationParameters(2500);
 		star2.SetPosition(V4(-4, 3)).SetSize(0.1).SetCenterOfGravity(&brightest);
-
-		cr = brightest.GetCatmullLine();
 	}
 
 	void Animate(long time) {
@@ -557,7 +553,7 @@ struct Scene {
 
 	void AddPoint(const V4& point) {
 		long time = glutGet(GLUT_ELAPSED_TIME);
-		cr->AddPoint(point, time);
+		brightest.AddPoint(point, time);
 	}
 
 	void Draw() {
@@ -568,7 +564,6 @@ struct Scene {
 };
 
 Scene scene;
-static bool cameraLocked = true;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
@@ -631,16 +626,16 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	if (!cameraLocked) 
-		camera.SetCenter(scene.brightest.GetPosition());
-
+	camera.SetCenter(scene.brightest.position);
 	scene.Draw();
+
 	glutSwapBuffers();									// exchange the two buffers
 }
 
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 32) cameraLocked = !cameraLocked;
+	if (key == 32) 
+		camera.locked = !camera.locked;
 }
 
 // Key of ASCII code released
@@ -652,15 +647,11 @@ void onKeyboardUp(unsigned char key, int pX, int pY) {
 void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
 
-		f cX = 2.0f * pX / windowWidth - 1;	// flip y axis
+		f cX = 2.0f * pX / windowWidth - 1;	
 		f cY = 1.0f - 2.0f * pY / windowHeight;
-		V4 click = V4(cX, cY, 0, 1);
-		click = click*(camera.Vinv()*camera.Pinv());
-		cX = click[0];
-		cY = click[1];
-		scene.AddPoint(V4(cX, cY));
+		scene.AddPoint(V4(cX, cY, 0, 1) * (camera.Vinv() * camera.Pinv()));
 
-		glutPostRedisplay();     // redraw
+		glutPostRedisplay(); 
 	}
 }
 
@@ -671,7 +662,6 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	f sec = time / 1000.0f;				// convert msec to sec
-	camera.Animate(sec);					// animate the camera
 	scene.Animate(time);
 	glutPostRedisplay();					// redraw the scene
 }
