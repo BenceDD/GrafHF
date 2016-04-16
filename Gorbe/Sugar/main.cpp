@@ -211,13 +211,18 @@ namespace Color {
 	const V Red = V(1, 0, 0); 
 	const V Green = V(0, 1, 0); 
 	const V Blue = V(0, 0, 1); 
+
 	const V Yellow = V(1, 1, 0); 
+	const V Pink = V(1, 0, 1);
+	const V Cyan = V(0, 1, 1);
+
 	const V Orange = V(1, 0.5, 0); 
 	const V Purple = V(0.5, 0, 1); 
-	const V Pink = V(1, 0, 1); 
+	
 	const V Grey = V(0.5, 0.5, 0.5); 
 	const V DarkGrey = V(0.1, 0.1, 0.1); 
 	const V White = V(1, 1, 1);
+	
 
 	V Product (const V& l, const V& h) { return V(l.v[0] * h.v[0], l.v[1] * h.v[1], l.v[2] * h.v[2]); }
 	V Saturate(const V& color) { return V(color.v[0] < 1 ? color.v[0] : 1, color.v[1] < 1 ? color.v[1] : 1, color.v[2] < 1 ? color.v[2] : 1); }
@@ -340,7 +345,7 @@ public:
 	}
 
 	Camera(const int w, const int h) : width(w), height(h) {
-		SetState(V(4, 4, 4), V(-1, -1, -1));
+		SetState(V(20, 20, 20), V(-1, -1, -1));
 	}
 
 	Ray GetRay(const int x, const int y) const {
@@ -354,12 +359,16 @@ struct Material;
 struct Intersection;
 struct Scene;
 
-struct Object {
+class Object {
 	const Material* material;
-
+public:
+	Object() {};
 	Object(const Material* m) : material(m) {}
 	virtual f Intersect(const Ray&) const = 0;
 	virtual V Normal(const V&) const = 0;
+	virtual const Material* GetMaterial() const {
+		return material;
+	}
 	virtual ~Object() {}
 };
 
@@ -414,7 +423,7 @@ public:
 
 		Intersection h = ShootRay(ray);
 		if (h.obj != NULL)
-			return h.obj->material->GetColor(*this, h, rl + 1);
+			return h.obj->GetMaterial()->GetColor(*this, h, rl + 1);
 		else
 			return V();
 	}
@@ -427,6 +436,10 @@ public:
 		return new_hit.obj == NULL || (hit.Position() - light->pos).Length() < new_hit.distance;
 	}
 };
+
+#include <thread>
+#include <mutex>
+#include <vector>
 
 class RayTracer {
 	Camera& camera;	// csak hogy ne kelljen mindenhova kiírni
@@ -442,6 +455,33 @@ public:
 				img[i * camera.width + j] = scene.GetColor(camera.GetRay(j, i));
 			}
 		}
+		f elapsed = (glutGet(GLUT_ELAPSED_TIME) - time) / 1000.;
+		printf("Tracing takes %f s", elapsed);
+	}
+
+	void TraceM(V* img, int n = 8) const {
+		long time = glutGet(GLUT_ELAPSED_TIME);
+		std::vector<std::thread> threads;
+		std::mutex m;
+		int part = 0;
+		for (int i = 0; i < n; ++i) {
+			threads.push_back(std::thread([&] () {
+				while (true) {
+					m.lock();
+					if (part < camera.height) {
+						int i = part++;
+						m.unlock();
+						for (int j = 0; j < camera.width; j++)
+							img[i * camera.width + j] = scene.GetColor(camera.GetRay(j, i));
+					} else {
+						m.unlock();
+						break;
+					}
+				}
+			}));
+		}
+		for (auto& t : threads)
+			t.join();
 		f elapsed = (glutGet(GLUT_ELAPSED_TIME) - time) / 1000.;
 		printf("Tracing takes %f s", elapsed);
 	}
@@ -475,6 +515,8 @@ class Triangle : public Object {
 	V a, b, c, normal;
 
 public:
+	Triangle() {}
+
 	Triangle(const Material* m, const V& a, const V& b, const V& c) : Object(m), a(a), b(b), c(c) {
 		V ab = b - a;
 		V ac = c - a;
@@ -508,6 +550,25 @@ public:
 		return normal;
 	}
 
+};
+
+
+class Rect : public Object {
+	Triangle part1, part2;
+public:
+	Rect() {}
+	Rect(const Material* m, const V& a, const V& b, const V& c, const V& d) : Object(m), part1(nullptr, a, b, c), part2(nullptr, a, c, d) { }
+
+	virtual f Intersect(const Ray& ray) const {
+		f distance = part1.Intersect(ray);
+		if (distance < 0)
+			distance = part2.Intersect(ray);
+		return distance;
+	}
+
+	virtual V Normal(const V&) const {
+		return part1.Normal(V());
+	}
 };
 
 
@@ -768,63 +829,73 @@ FullScreenTexturedQuad fullScreenTexturedQuad;
 
 // szükséges dolgok..
 Camera camera(windowWidth, windowHeight);
-Scene scene(camera, Color::DarkGrey);
+Scene scene(camera, Color::Grey);
 RayTracer rt(scene);
 
 
 // a kompozíció
-DiffuseMaterial orange_material(Color::Orange);
-SpecularMaterial purple_material(Color::Purple);
-SpecularMaterial red_material(Color::Red);
-SpecularMaterial green_material(Color::Green);
-SpecularMaterial blue_material(Color::Blue);
-SpecularMaterial pink_material(Color::Pink);
-ReflectiveMaterial mirror;
+SpecularMaterial blue_material(Color::Cyan);
+DiffuseMaterial green_material(Color::Green);
 
-Light light(Light::Point, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::White * 5);
-Light light2(Light::Point, V(-2, 9, -2), V(0, -1, 0), Color::White * 20);
+Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::White *0.1);
+Light light2(Light::Point, V(0, 20, 0), V(0, -1, 0), Color::White * 1000);
 
-Ellipsoid gomb(&red_material);
-Ellipsoid gomb2(&green_material);
-Ellipsoid gomb3(&blue_material);
-Ellipsoid gomb4(&mirror);
-Ellipsoid gomb5(&orange_material);
+V poolA(-25, 0, -5);
+V poolB(-25, 0, 5);
+V poolC(-25, -3, 5);
+V poolD(-25, -3, -5);
+V poolE(25, 0, -5);
+V poolF(25, 0, 5);
+V poolG(25, -3, 5);
+V poolH(25, -3, -5);
 
-Plane bottom(&purple_material, V(0, 1, 0), 1);
-Plane wall1(&mirror, V(1, 0, 0), 10);
-Plane wall2(&pink_material, V(-1, 0, 0), 10);
-Plane wall3(&mirror, V(0, 0, 1), 10);
-Plane wall4(&blue_material, V(0, 0, -1), 10);
+Rect part1(&blue_material, poolA, poolB, poolC, poolD);
+Rect part2(&blue_material, poolB, poolF, poolG, poolC);
+Rect part3(&blue_material, poolE, poolH, poolG, poolF);
+Rect part4(&blue_material, poolA, poolD, poolH, poolE);
+Rect part5(&blue_material, poolG, poolH, poolD, poolC);
 
+V edgeA(100, 0, 100);
+V edgeB(100, 0, 5);
+V edgeC(100, 0, -5);
+V edgeD(100, 0, -100);
+V edgeE(-100, 0, 100);
+V edgeF(-100, 0, 5);
+V edgeG(-100, 0, -5);
+V edgeH(-100, 0, -100);
+
+Rect edge1(&green_material, edgeF, edgeE, edgeB, edgeA);
+Rect edge2(&green_material, poolE, poolF, edgeB, edgeC);
+Rect edge3(&green_material, edgeC, edgeD, edgeH, edgeG);
+Rect edge4(&green_material, poolB, poolA, edgeG, edgeF);
+
+V background[windowWidth * windowHeight];
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
-	static V background[windowWidth * windowHeight];
+//	static V background[windowWidth * windowHeight];
+	
 
-	rt.scene.objects.PushBack(&gomb);
-	rt.scene.objects.PushBack(&gomb2);
-	rt.scene.objects.PushBack(&gomb3);
-	rt.scene.objects.PushBack(&gomb4);
-	rt.scene.objects.PushBack(&gomb5);
 
-	rt.scene.objects.PushBack(&bottom);
-	rt.scene.objects.PushBack(&wall1);
-	rt.scene.objects.PushBack(&wall2);
-	rt.scene.objects.PushBack(&wall3);
-	rt.scene.objects.PushBack(&wall4);
+	rt.scene.objects.PushBack(&part1);
+	rt.scene.objects.PushBack(&part2);
+	rt.scene.objects.PushBack(&part3);
+	rt.scene.objects.PushBack(&part4);
+	rt.scene.objects.PushBack(&part5);
+
+	rt.scene.objects.PushBack(&edge1);
+	rt.scene.objects.PushBack(&edge2);
+	rt.scene.objects.PushBack(&edge3);
+	rt.scene.objects.PushBack(&edge4);
+
 
 	rt.scene.lights.PushBack(&light);
 	rt.scene.lights.PushBack(&light2);
 
 
-	gomb.Translation(V(3, 0, 0));
-	gomb2.Translation(V(0, 3, 0));
-	gomb3.Translation(V(0, 0, 3));
-	gomb5.Translation(V(4, 0, 2));
-	gomb4.Streching(V(2, 1, 1));
-	gomb4.Translation(V(-1, 1, -1));
 
-	rt.Trace(background);
+
+	rt.TraceM(background);
 
 	fullScreenTexturedQuad.Create(background);
 
@@ -883,9 +954,66 @@ void onDisplay() {
 	glutSwapBuffers();									// exchange the two buffers
 }
 
+struct Quaternion {
+	f w, i, j, k;
+
+	Quaternion() : w(0.0f), i(1.0f), j(0.0f), k(0.0f) {}
+	Quaternion(f w, f i, f j, f k) : w(w), i(i), j(j), k(k) {}
+
+	Quaternion operator * (const Quaternion& q) {
+		Quaternion ret;
+		ret.w = w * q.w - i * q.i - j * q.j - k * q.k;
+		ret.i = w * q.i + i * q.w + j * q.k - k * q.j;
+		ret.j = w * q.j - i * q.k + j * q.w + k * q.i;
+		ret.k = w * q.k + i * q.j - j * q.i + k * q.w;
+		return ret;
+	}
+
+	Quaternion Inverse() { return Quaternion(w, -i, -j, -k); }
+};
+
+
+V RotateAroundAxis(const V& point, const V& axis, const f angle) {
+	Quaternion vec(0, point.v[0], point.v[1], point.v[2]);
+	Quaternion rot;
+	rot.w = cosf(angle / 2.0f);
+	rot.i = axis.v[0] * -sinf(angle / 2.0f);
+	rot.j = axis.v[1] * -sinf(angle / 2.0f);
+	rot.k = axis.v[2] * -sinf(angle / 2.0f);
+
+	vec = (rot * vec) * rot.Inverse();
+
+	return V(vec.i, vec.j, vec.k);
+}
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	if (key == 'd') glutPostRedisplay();         // if d, invalidate display, i.e. redraw
+	/*
+	if (key == 'a' || key == 'w' || key == 's' || key == 'd') {
+		V org_pos = rt.scene.camera.GetPosition();
+		f angle = 0.2;
+
+		if (key == 'a' || key == 'd') {
+			if (key == 'd')
+				angle = -angle;
+			org_pos = RotateAroundAxis(org_pos, V(0, 1, 0), angle);
+		} else {
+			if (key == 's')
+				angle = -angle;
+			org_pos = RotateAroundAxis(org_pos, V(1, 0, 0), angle);
+		}
+		rt.scene.camera.SetState(org_pos, -org_pos);
+	}
+*/
+
+
+	if (key == 'a')
+		light.color = light.color * 5.;
+	if (key == 's')
+		light.color = light.color / 5.;
+
+	rt.TraceM(background);
+	glutPostRedisplay();
+
 }
 
 // Key of ASCII code released
