@@ -18,8 +18,8 @@
 //
 // NYILATKOZAT
 // ---------------------------------------------------------------------------------------------
-// Nev    : 
-// Neptun : 
+// Nev    : Mikulas Bence
+// Neptun : G8MZZ1
 // ---------------------------------------------------------------------------------------------
 // ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
 // mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
@@ -784,32 +784,15 @@ class ReflectiveMaterial : public Material {
 	}
 
 public:
-	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
-		C ret;
-		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
-			switch (scene.lights[i]->type) {
-				case Light::Ambient: {
-						ret += (scene.lights[i]->color);
-						break;
-					}
-				case Light::Directional: {
-						ret += (scene.lights[i]->color);
-						break;
-					}
-				case Light::Point: {
-						Ray reflected_ray;
-						reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
-						reflected_ray.origin = hit.Position() + (reflected_ray.dir * 1e-3);
-						ret += scene.GetColor(reflected_ray, rl + 1);
-						break;
-					}
-			}
-		}
-		return ret;
+	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {	
+		Ray reflected_ray;
+		reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
+		reflected_ray.origin = hit.Position() + (reflected_ray.dir * 1e-3);
+		return scene.GetColor(reflected_ray, rl + 1);
 	}
 };
 
-/*
+
 struct ReflectiveMaterial2 : public Material {
 	const C F0;
 
@@ -825,15 +808,14 @@ struct ReflectiveMaterial2 : public Material {
 		return F0 + (1 - F0) * pow(1 - cosTheta, 5);
 	}
 
-	C getColor(Intersection inter, const Light* lgts, size_t lgt_num, int recursion_level) {
+	C getColor(const Scene& scene, const Intersection& hit, const Light* lgts, size_t lgt_num, int recursion_level) {
 		Ray reflected_ray;
-		reflected_ray.dir = reflect(inter.ray.dir, inter.normal);
-		reflected_ray.origin = inter.pos + 1e-3*reflected_ray.dir;
-		return F(dot(-inter.ray.dir, inter.normal))
-			* scene.shootRay(reflected_ray, recursion_level + 1);
+		reflected_ray.dir = reflect(hit.ray.dir, hit.normal);
+		reflected_ray.origin = hit.pos + 1e-3*reflected_ray.dir;
+		return F(dot(-hit.ray.dir, hit.normal))* scene.shootRay(reflected_ray, recursion_level + 1);
 	}
 };
-*/
+
 
 /*
 struct RefractiveMaterial : public ReflectiveMaterial {
