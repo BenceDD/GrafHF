@@ -382,7 +382,7 @@ public:
 	}
 
 	Camera(const int w, const int h) : width(w), height(h) {
-		SetState(V(20, 20, 20), V(-1, -1, -1));
+		SetState(V(6, 6, 6), V(-1, -1, -1));
 	}
 
 	Ray GetRay(const int x, const int y) const {
@@ -820,6 +820,7 @@ public:
 	inline V reflect(const V& inDir, const V& normal) const {
 		return inDir - normal * (normal * inDir) * 2.0f;
 	}
+
 	inline V refract(const V& inDir, const V& normal) const {
 		f ior = n;
 		f cosa = -(normal * inDir);
@@ -851,7 +852,7 @@ public:
 		Ray refracted_ray;
 		refracted_ray.dir = refract(hit.ray.dir, hit.SurfaceNormal());
 		refracted_ray.origin = hit.Position() + (refracted_ray.dir * 1e-3);
-		ret += F * scene.GetColor(refracted_ray, rl + 1);
+		ret += (C(1, 1, 1) - F) * scene.GetColor(refracted_ray, rl + 1);
 
 		return ret;
 	}
@@ -958,10 +959,10 @@ RayTracer rt(scene);
 // a kompozíció
 SpecularMaterial blue_material(Color::Cyan);
 DiffuseMaterial green_material(Color::Green);
-
 SmoothMaterial smooth_material;
+SpecularMaterial orange_material(Color::Orange);
 
-Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::Cyan);
+Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::Cyan * 0.1);
 Light light2(Light::Point, V(0, 20, 0), V(0, -1, 0), Color::White * 1000);
 
 V poolA(-25, 0, -5);
@@ -972,7 +973,6 @@ V poolE(25, 0, -5);
 V poolF(25, 0, 5);
 V poolG(25, -3, 5);
 V poolH(25, -3, -5);
-
 Rect part1(&blue_material, poolA, poolB, poolC, poolD);
 Rect part2(&blue_material, poolB, poolF, poolG, poolC);
 Rect part3(&blue_material, poolE, poolH, poolG, poolF);
@@ -983,7 +983,6 @@ V waterA(-25, -0.5, -5);
 V waterB(-25, -0.5, 5);
 V waterC(25, -0.5, 5);
 V waterD(25, -0.5, -5);
-
 Rect water(&smooth_material, waterA, waterB, waterC, waterD);
 
 V edgeA(100, 0, 100);
@@ -994,11 +993,13 @@ V edgeE(-100, 0, 100);
 V edgeF(-100, 0, 5);
 V edgeG(-100, 0, -5);
 V edgeH(-100, 0, -100);
-
 Rect edge1(&green_material, edgeF, edgeE, edgeB, edgeA);
 Rect edge2(&green_material, poolE, poolF, edgeB, edgeC);
 Rect edge3(&green_material, edgeC, edgeD, edgeH, edgeG);
 Rect edge4(&green_material, poolB, poolA, edgeG, edgeF);
+
+
+Ellipsoid ellipsoid(&orange_material);
 
 C background[windowWidth * windowHeight];
 // Initialization, create an OpenGL context
@@ -1018,6 +1019,9 @@ void onInitialization() {
 	rt.scene.objects.PushBack(&edge2);
 	rt.scene.objects.PushBack(&edge3);
 	rt.scene.objects.PushBack(&edge4);
+
+//	ellipsoid.Streching(V(6, 1, 1));
+	rt.scene.objects.PushBack(&ellipsoid);
 
 	rt.scene.lights.PushBack(&light);
 	rt.scene.lights.PushBack(&light2);
