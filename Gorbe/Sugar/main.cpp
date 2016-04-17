@@ -814,7 +814,7 @@ public:
 
 
 class SmoothMaterial : public Material {
-	V F0;
+	C F0;
 	float n;
 public:
 	inline V reflect(const V& inDir, const V& normal) const {
@@ -835,13 +835,24 @@ public:
 		return inDir / ior + normal_inv * (cosa / ior - sqrt(disc));
 	}
 
-	inline V Fresnel(const V& inDir, const V& normal) const {
+	inline C Fresnel(const V& inDir, const V& normal) const {
 		f cosa = fabs(normal * inDir);
-		return F0 + (V(1, 1, 1) - F0) * pow(1 - cosa, 5);
+		return F0 + (C(1, 1, 1) - F0) * pow(1 - cosa, 5);
 	}
 
 	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
-		C ret;
+
+		C F = Fresnel(hit.ray.dir, hit.SurfaceNormal);
+
+		Ray reflected_ray;
+		reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
+		reflected_ray.origin = hit.Position() + (reflected_ray.dir * 1e-3);
+		C ret = F * scene.GetColor(reflected_ray, rl + 1);
+
+		Ray refracted_ray;
+		refracted_ray.dir = refract(hit.ray.dir, hit.SurfaceNormal);
+		refracted_ray.origin = hit.Position() + (refracted_ray.dir * 1e-3);
+		ret += F * scene.GetColor(refracted_ray, rl + 1);
 
 		return ret;
 	}
