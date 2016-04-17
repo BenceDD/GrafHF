@@ -32,6 +32,8 @@
 // negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
 //=============================================================================================
 
+
+
 #define _USE_MATH_DEFINES
 #include <stdio.h>
 #include <stdlib.h>
@@ -54,7 +56,12 @@ const unsigned int windowWidth = 600, windowHeight = 600;
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 // Innentol modosithatod...
 
-// OpenGL major and minor versions
+/*
+	Átvettem részleteket az alábbi Wiki oldalról, valamint az elõadás fóliáiról.
+	A További átvett részleteket az adott helyen odaírtam kommentbe.
+	https://wiki.sch.bme.hu/Sz%C3%A1m%C3%ADt%C3%B3g%C3%A9pes_grafika_h%C3%A1zi_feladat_tutorial
+*/
+
 int majorVersion = 3, minorVersion = 0;
 using f = float;
 const int array_size = 30;
@@ -72,7 +79,6 @@ void getErrorInfo(unsigned int handle) {
 	}
 }
 
-// check if shader could be compiled
 void checkShader(unsigned int shader, char * message) {
 	int OK;
 	glGetShaderiv(shader, GL_COMPILE_STATUS, &OK);
@@ -82,7 +88,6 @@ void checkShader(unsigned int shader, char * message) {
 	}
 }
 
-// check if shader could be linked
 void checkLinking(unsigned int program) {
 	int OK;
 	glGetProgramiv(program, GL_LINK_STATUS, &OK);
@@ -92,33 +97,32 @@ void checkLinking(unsigned int program) {
 	}
 }
 
-// vertex shader in GLSL
 const char *vertexSource = R"(
 	#version 130
     precision highp float;
 
-			in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+				in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
 	out vec2 texcoord;			// output attribute: texture coordinate
 
-			void main() {
+				void main() {
 		texcoord = (vertexPosition + vec2(1, 1))/2;							// -1,1 to 0,1
 		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1); 		// transform to clipping space
 	}
 )";
 
-// fragment shader in GLSL
 const char *fragmentSource = R"(
 	#version 130
     precision highp float;
 
-			uniform sampler2D textureUnit;
+				uniform sampler2D textureUnit;
 	in  vec2 texcoord;			// interpolated texture coordinates
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
-			void main() {
+				void main() {
 		fragmentColor = texture(textureUnit, texcoord); 
 	}
 )";
+
 
 template <typename T, int max_size>
 class SimpleArray {
@@ -132,7 +136,7 @@ public:
 
 	void PushBack(T elem) {
 		if (current_size != max_size)
-			container[current_size++] = elem;	// tesztelve.
+			container[current_size++] = elem;
 	}
 
 	T& operator[] (int n) {
@@ -150,7 +154,7 @@ public:
 	}
 };
 
-// 3D coordinatas
+
 struct V {
 	f v[4];
 
@@ -160,19 +164,18 @@ struct V {
 
 	operator f*() { return &v[0]; }
 
-	// konstanssal szorzás balról
 	V operator* (const f scalar) const {
 		return V(v[0] * scalar, v[1] * scalar, v[2] * scalar, v[3] * scalar);
 	}
-	// konstanssal szorzás jobbról
+
 	friend V operator* (const f scalar, const V& v) {
 		return v * scalar;
 	}
-	// skaláris szorzás
+
 	f operator * (const V& rhs) const {
 		return v[0] * rhs.v[0] + v[1] * rhs.v[1] + v[2] * rhs.v[2];
 	}
-	// vektoriális szorzás
+
 	V operator % (const V& rhs) const {
 		return V(v[1] * rhs.v[2] - v[2] * rhs.v[1], v[2] * rhs.v[0] - v[0] * rhs.v[2], v[0] * rhs.v[1] - v[1] * rhs.v[0]);
 	}
@@ -210,9 +213,9 @@ struct V {
 
 struct C {
 	V v;
-	C() { }
-	explicit C(const f r, const f g, const f b) : v(r, g, b){ }
-	explicit C(const V& v) : v(v) { }
+	C() {}
+	explicit C(const f r, const f g, const f b) : v(r, g, b) {}
+	explicit C(const V& v) : v(v) {}
 	operator f*() { return &v.v[0]; }
 	C operator* (const f scalar) const {
 		return C(v * scalar);
@@ -235,45 +238,34 @@ struct C {
 	C operator- (const f scalar) const {
 		return C(v.v[0] - scalar, v.v[1] - scalar, v.v[2] - scalar);
 	}
-
 	C friend operator- (const f scalar, const C& c) {
 		return C(scalar - c.v.v[0], scalar - c.v.v[0], scalar - c.v.v[0]);
 	}
-
 	C& operator += (const C& rhs) {
 		v += rhs.v;
 		return *this;
 	}
-	C Saturate() const { return C(v.v[0] < 1 ? v.v[0] : 1, v.v[1] < 1 ? v.v[1] : 1, v.v[2] < 1 ? v.v[2] : 1); }
 };
 
 
 namespace Color {
-	const C Red = C(1, 0, 0);
 	const C Green = C(0, 1, 0);
 	const C Blue = C(0, 0, 1);
-
-	const C Yellow = C(1, 1, 0);
-	const C Pink = C(1, 0, 1);
 	const C Cyan = C(0, 1, 1);
-
 	const C Orange = C(1, 0.5, 0);
 	const C Purple = C(0.5, 0, 1);
-
-	const C Grey = C(0.5, 0.5, 0.5);
-	const C DarkGrey = C(0.1, 0.1, 0.1);
 	const C White = C(1, 1, 1);
 }
 
-// row-major matrix 4x4
+
 struct M {
 	f m[4][4];
 
 	M() {}
 	M(f m00, f m01, f m02, f m03,
-		f m10, f m11, f m12, f m13,
-		f m20, f m21, f m22, f m23,
-		f m30, f m31, f m32, f m33) {
+	  f m10, f m11, f m12, f m13,
+	  f m20, f m21, f m22, f m23,
+	  f m30, f m31, f m32, f m33) {
 		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
 		m[1][0] = m10; m[1][1] = m11; m[1][2] = m02; m[1][3] = m13;
 		m[2][0] = m20; m[2][1] = m21; m[2][2] = m02; m[2][3] = m23;
@@ -367,7 +359,6 @@ class Camera {
 	}
 
 public:
-	// A kamera felbontása állandó marad!
 	const int width;
 	const int height;
 
@@ -392,9 +383,11 @@ public:
 	}
 };
 
+
 struct Material;
 struct Intersection;
 struct Scene;
+
 
 class Object {
 	const Material* material;
@@ -411,12 +404,12 @@ public:
 
 
 struct Intersection {
-	Ray ray;		// A sugár ami a találatot okozta
-	Object* obj;	// Pointer az objektumra amire a metszéspontot kaptuk
+	Ray ray;
+	Object* obj;
 	f distance;
 
-	Intersection() : obj(NULL) { }
-	Intersection(const Ray& r, Object* o, const f d) : ray(r), obj(o), distance(d) { }
+	Intersection() : obj(NULL) {}
+	Intersection(const Ray& r, Object* o, const f d) : ray(r), obj(o), distance(d) {}
 	V Position() const { return ray.origin + (ray.dir.Normal() * distance); }
 	V SurfaceNormal() const {
 		return obj->Normal(Position());
@@ -474,12 +467,9 @@ public:
 	}
 };
 
-#include <thread>
-#include <mutex>
-#include <vector>
 
 class RayTracer {
-	Camera& camera;	// csak hogy ne kelljen mindenhova kiírni
+	Camera& camera;
 public:
 	Scene& scene;
 
@@ -495,59 +485,9 @@ public:
 		f elapsed = (glutGet(GLUT_ELAPSED_TIME) - time) / 1000.;
 		printf("Tracing takes %f s", elapsed);
 	}
-
-	void TraceM(C* img, int n = 8) const {
-		long time = glutGet(GLUT_ELAPSED_TIME);
-		std::vector<std::thread> threads;
-		std::mutex m;
-		int part = 0;
-		for (int i = 0; i < n; ++i) {
-			threads.push_back(std::thread([&] () {
-				while (true) {
-					m.lock();
-					if (part < camera.height) {
-						int i = part++;
-						m.unlock();
-						for (int j = 0; j < camera.width; j++)
-							img[i * camera.width + j] = scene.GetColor(camera.GetRay(j, i));
-					} else {
-						m.unlock();
-						break;
-					}
-				}
-			}));
-		}
-		for (auto& t : threads)
-			t.join();
-		f elapsed = (glutGet(GLUT_ELAPSED_TIME) - time) / 1000.;
-		printf("Tracing takes %f s", elapsed);
-	}
 };
 
-
-class Plane : public Object {
-protected:
-	V normal;
-	f D;	// Ax + By + Cz + D = 0
-public:
-	Plane(Material* m, const V& n, const f d = 0) : Object(m), normal(n), D(d) {}
-
-	virtual f Intersect(const Ray& ray) const {
-		f d = ray.dir * normal;
-		// mivel csak 1 oldalú, ezért itt visszatérünk
-		if (d > -0.001)
-			return -1;
-		f t = -((normal * ray.origin) + D) / d;
-		if (t < 0 || t > 100) return -1;
-		return t;
-	}
-
-	virtual V Normal(const V&) const {
-		return normal;
-	}
-};
-
-
+// Wikirõl átvett rész, kisebb módosításokkal
 class Triangle : public Object {
 	V a, b, c, normal;
 
@@ -565,7 +505,6 @@ public:
 		if (ray_travel_dist < 0 || isnan(ray_travel_dist))
 			return -1;
 
-		// Számoljuk ki, hogy a sugár hol metszi a sugár síkját.
 		V plane_intersection = ray.origin + (ray.dir * ray_travel_dist);
 		const V& x = plane_intersection;
 
@@ -594,7 +533,7 @@ class Rect : public Object {
 	Triangle part1, part2;
 public:
 	Rect() {}
-	Rect(const Material* m, const V& a, const V& b, const V& c, const V& d) : Object(m), part1(nullptr, a, b, c), part2(nullptr, a, c, d) { }
+	Rect(const Material* m, const V& a, const V& b, const V& c, const V& d) : Object(m), part1(nullptr, a, b, c), part2(nullptr, a, c, d) {}
 
 	virtual f Intersect(const Ray& ray) const {
 		f distance = part1.Intersect(ray);
@@ -608,7 +547,8 @@ public:
 	}
 };
 
-
+// Felhasználtam az alábbi PDF-ben található képleteket:
+// http://euclid.nmu.edu/~bpeterso/CS446-Handouts/Notes/CS446_Note_7.pdf
 class Quadratic : public Object {
 protected:
 	f A, B, C, D, E, F, G, H, I, J;
@@ -616,7 +556,7 @@ public:
 	Quadratic(const Material* m) : Object(m),
 		A(0), B(0), C(0), D(0), E(0), F(0), G(0), H(0), I(0), J(0) {}
 
-	void Streching(const V& v) {
+	Quadratic& Streching(const V& v) {
 		A = A / (v.v[0] * v.v[0]);
 		B = B / (v.v[1] * v.v[1]);
 		C = C / (v.v[2] * v.v[2]);
@@ -626,15 +566,17 @@ public:
 		G = G / v.v[0];
 		H = H / v.v[1];
 		I = I / v.v[2];
+		return *this;
 	}
 
-	void Translation(const V& v) {
+	Quadratic& Translation(const V& v) {
 		J = A * v.v[0] * v.v[0] + B * v.v[1] * v.v[1] + C * v.v[2] * v.v[2] +
 			D * v.v[1] * v.v[2] + E * v.v[0] * v.v[2] + F * v.v[0] * v.v[1] -
 			G * v.v[0] - H * v.v[1] - I * v.v[2] + J;
 		G = -2 * A * v.v[0] - E * v.v[2] - F * v.v[1] + G;
 		H = -2 * B * v.v[1] - D * v.v[2] - F * v.v[0] + H;
 		I = -2 * C * v.v[2] - D * v.v[1] - E * v.v[0] + I;
+		return *this;
 	}
 
 	virtual f Intersect(const Ray& ray) const {
@@ -666,7 +608,7 @@ public:
 			2 * A * p.v[0] + E * p.v[2] + F * p.v[1] + G,
 			2 * B * p.v[1] + D * p.v[2] + F * p.v[0] + H,
 			2 * C * p.v[2] + D * p.v[1] + E * p.v[0] + I
-		).Normal();
+			).Normal();
 	}
 
 	virtual ~Quadratic() {}
@@ -698,28 +640,28 @@ public:
 		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
 			switch (scene.lights[i]->type) {
 				case Light::Ambient: {
-						ret += scene.lights[i]->color * color;
-						break;
-					}
+					ret += scene.lights[i]->color * color;
+					break;
+				}
 				case Light::Directional: {
-						if (scene.IsVisible(scene.lights[i], hit)) {
-							f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
-							if (intensity < 0)
-								intensity = 0;
-							ret += scene.lights[i]->color *  color * intensity;
-						}
-						break;
+					if (scene.IsVisible(scene.lights[i], hit)) {
+						f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
+						if (intensity < 0)
+							intensity = 0;
+						ret += scene.lights[i]->color *  color * intensity;
 					}
+					break;
+				}
 				case Light::Point: {
-						if (scene.IsVisible(scene.lights[i], hit)) {
-							V pos_to_light = scene.lights[i]->pos - hit.Position();
-							f attenuation = pow(1 / pos_to_light.Length(), 2);
-							f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
-							float intensity = tmp > 0 ? tmp : 0;
-							ret += scene.lights[i]->color * color * attenuation * intensity;
-						}
-						break;
+					if (scene.IsVisible(scene.lights[i], hit)) {
+						V pos_to_light = scene.lights[i]->pos - hit.Position();
+						f attenuation = pow(1 / pos_to_light.Length(), 2);
+						f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
+						float intensity = tmp > 0 ? tmp : 0;
+						ret += scene.lights[i]->color * color * attenuation * intensity;
 					}
+					break;
+				}
 			}
 		}
 		return ret;
@@ -741,78 +683,50 @@ public:
 		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
 			switch (scene.lights[i]->type) {
 				case Light::Ambient: {
-						ret += scene.lights[i]->color * color;
-						break;
-					}
+					ret += scene.lights[i]->color * color;
+					break;
+				}
 				case Light::Directional: {
-						C specular_color;
+					C specular_color;
 
-						if (scene.IsVisible(scene.lights[i], hit)) {
-							f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
-							if (intensity < 0)
-								intensity = 0;
-							specular_color = scene.lights[i]->color * color * intensity;
-						}
-						ret += specular_color;
-						break;
+					if (scene.IsVisible(scene.lights[i], hit)) {
+						f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
+						if (intensity < 0)
+							intensity = 0;
+						specular_color = scene.lights[i]->color * color * intensity;
 					}
+					ret += specular_color;
+					break;
+				}
 				case Light::Point: {
-						if (scene.IsVisible(scene.lights[i], hit)) {
-							// Diffúz számítás
-							V pos_to_light = scene.lights[i]->pos - hit.Position();
-							f attenuation = pow(1 / pos_to_light.Length(), 2);
-							f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
-							float intensity = tmp > 0 ? tmp : 0;
-							C specular_color = scene.lights[i]->color * color * attenuation * intensity;
-							ret += specular_color;
+					if (scene.IsVisible(scene.lights[i], hit)) {
+						V pos_to_light = scene.lights[i]->pos - hit.Position();
+						f attenuation = pow(1 / pos_to_light.Length(), 2);
+						f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
+						float intensity = tmp > 0 ? tmp : 0;
+						C specular_color = scene.lights[i]->color * color * attenuation * intensity;
+						ret += specular_color;
 
-							// Spekuláris számítás
-							V light_dir = pos_to_light.Normal();
-							V eye_dir = -hit.ray.dir;
-							V halfway_dir = (light_dir + eye_dir.Normal()).Normal();
-							V surface_normal = hit.SurfaceNormal();
-							f d = halfway_dir * surface_normal;
-							d = d > 0 ? d : 0;
 
-							float specular_power = pow(d, shininess);
-							ret += (scene.lights[i]->color * specular_power) * (specular_color * 0.2);
-						}
-						break;
+						V light_dir = pos_to_light.Normal();
+						V eye_dir = -hit.ray.dir;
+						V halfway_dir = (light_dir + eye_dir.Normal()).Normal();
+						V surface_normal = hit.SurfaceNormal();
+						f d = halfway_dir * surface_normal;
+						d = d > 0 ? d : 0;
+
+						float specular_power = pow(d, shininess);
+						ret += (scene.lights[i]->color * specular_power) * (specular_color * 0.2);
 					}
+					break;
+				}
 			}
 		}
 		return ret;
 	}
 };
 
-
-class ReflectiveMaterial : public Material {
-	const C F0;
-	/*
-	ReflectiveMaterial(const C& n, const C& k)
-		: F0(((n - 1)*(n - 1) + k*k) /
-			((n + 1)*(n + 1) + k*k)) {}
-	
-	*/
-
-	inline V reflect(const V& I, const V& N) const {
-		return I - (N * (2.0 * (N * I)));
-	}
-
-	inline C Fresnel(f cosTheta) const {
-		return F0 + (1 - F0) * pow(1 - cosTheta, 5);
-	}
-
-public:
-	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {	
-		Ray reflected_ray;
-		reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
-		reflected_ray.origin = hit.Position() + (reflected_ray.dir * 1e-3);
-		return Fresnel(-hit.ray.dir * hit.SurfaceNormal()) * scene.GetColor(reflected_ray, rl + 1);
-	}
-};
-
-
+// A bmerender.ppt (10. dia) felhasználásával készült
 class SmoothMaterial : public Material {
 	C F0;
 	float n;
@@ -859,111 +773,59 @@ public:
 };
 
 
-/*
-struct RefractiveMaterial : public ReflectiveMaterial {
-	f n, n_rec;
-
-	inline V refract(V I, V N, double n) {
-		double k = 1.0 - n * n * (1.0 - dot(N, I) * dot(N, I));
-		if (k < 0.0) {
-			return V();
-		} else {
-			return n * I - (n * dot(N, I) + sqrt(k)) * N;
-		}
-	}
-
-	RefractiveMaterial(float n, V k, V specular_color, float shininess) : ReflectiveMaterial(n, k, specular_color, shininess), n(n), n_rec(1 / n) {}
-
-	V getColor(Intersection inter, const Light* lgts, size_t lgt_num, int recursion_level) {
-		if (dot(inter.ray.direction, inter.normal) > 0) {
-			inter.normal = -inter.normal;
-		}
-
-		Ray reflected;
-		reflected.direction = reflect(inter.ray.direction, inter.normal);
-		reflected.origin = inter.pos + 1e-3*reflected.direction;
-
-		Color reflectedColor, refractedColor;
-
-		Ray refracted;
-		refracted.direction = refract(inter.ray.direction, inter.normal, inter.ray.in_air ? n : n_rec);
-		if (!refracted.direction.isNull()) {
-			refracted.origin = inter.pos + 1e-3 * refracted.direction;
-			refracted.in_air = !inter.ray.in_air;
-
-			V F_vec = F(dot(-inter.ray.direction, inter.normal));
-			reflectedColor = F_vec * scene.shootRay(reflected, recursion_level + 1)
-				+ getSpecularHighlight(inter, lgts, lgt_num, reflected.travelled_dist, false);
-			refractedColor = (1 - F_vec) * scene.shootRay(refracted, recursion_level + 1);
-		} else {
-			reflectedColor = scene.shootRay(reflected, recursion_level + 1)
-				+ getSpecularHighlight(inter, lgts, lgt_num, reflected.travelled_dist, true);
-		}
-
-		return reflectedColor + refractedColor;
-	}
-};
-
-*/
-// handle of the shader program
 unsigned int shaderProgram;
 
 class FullScreenTexturedQuad {
-	unsigned int vao, textureId;	// vertex array object id and texture id
+	unsigned int vao, textureId;
 public:
 	void Create(C image[windowWidth * windowHeight]) {
-		glGenVertexArrays(1, &vao);	// create 1 vertex array object
-		glBindVertexArray(vao);		// make it active
+		glGenVertexArrays(1, &vao);
+		glBindVertexArray(vao);
 
-		unsigned int vbo;		// vertex buffer objects
-		glGenBuffers(1, &vbo);	// Generate 1 vertex buffer objects
+		unsigned int vbo;
+		glGenBuffers(1, &vbo);
 
-								// vertex coordinates: vbo[0] -> Attrib Array 0 -> vertexPosition of the vertex shader
-		glBindBuffer(GL_ARRAY_BUFFER, vbo); // make it active, it is an array
-		static float vertexCoords[] = { -1, -1,   1, -1,  -1, 1,
-			1, -1,   1,  1,  -1, 1 };	// two triangles forming a quad
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords, GL_STATIC_DRAW);	   // copy to that part of the memory which is not modified 
-																							   // Map Attribute Array 0 to the current bound vertex buffer (vbo[0])
+		glBindBuffer(GL_ARRAY_BUFFER, vbo);
+		static float vertexCoords[] = { -1, -1, 1, -1, -1, 1, 1, -1, 1, 1, -1, 1 };
+		glBufferData(GL_ARRAY_BUFFER, sizeof(vertexCoords), vertexCoords, GL_STATIC_DRAW);
+
 		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);     // stride and offset: it is tightly packed
+		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 0, NULL);
 
-																	  // Create objects by setting up their vertex data on the GPU
-		glGenTextures(1, &textureId);  				// id generation
-		glBindTexture(GL_TEXTURE_2D, textureId);    // binding
+		glGenTextures(1, &textureId);
+		glBindTexture(GL_TEXTURE_2D, textureId);
 
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, windowWidth, windowHeight, 0, GL_RGBA, GL_FLOAT, image); // To GPU
-		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST); // sampling
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, windowWidth, windowHeight, 0, GL_RGBA, GL_FLOAT, image);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
 
 	void Draw() {
-		glBindVertexArray(vao);	// make the vao and its vbos active playing the role of the data source
+		glBindVertexArray(vao);
 		int location = glGetUniformLocation(shaderProgram, "textureUnit");
 		if (location >= 0) {
-			glUniform1i(location, 0);		// texture sampling unit is TEXTURE0
+			glUniform1i(location, 0);
 			glActiveTexture(GL_TEXTURE0);
-			glBindTexture(GL_TEXTURE_2D, textureId);	// connect the texture to the sampler
+			glBindTexture(GL_TEXTURE_2D, textureId);
 		}
-		glDrawArrays(GL_TRIANGLES, 0, 6);	// draw two triangles forming a quad
+		glDrawArrays(GL_TRIANGLES, 0, 6);
 	}
 };
 
-// The virtual world: single quad
 FullScreenTexturedQuad fullScreenTexturedQuad;
-
-// szükséges dolgok..
 Camera camera(windowWidth, windowHeight);
 Scene scene(camera, Color::Cyan);
 RayTracer rt(scene);
+C image[windowWidth * windowHeight];
 
-// a kompozíció
+
 SpecularMaterial blue_material(Color::Cyan);
 DiffuseMaterial green_material(Color::Green);
 SmoothMaterial smooth_material;
 SpecularMaterial orange_material(Color::Orange);
 
-Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::Cyan * 0.1);
-Light light2(Light::Point, V(0, 20, 0), V(0, -1, 0), Color::White * 1000);
+Light ambient(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::Cyan * 0.5);
+Light directional(Light::Point, V(0, 50, 0), V(0, -1, 0), Color::White * 1000);
 
 V poolA(-25, 0, -5);
 V poolB(-25, 0, 5);
@@ -998,37 +860,31 @@ Rect edge2(&green_material, poolE, poolF, edgeB, edgeC);
 Rect edge3(&green_material, edgeC, edgeD, edgeH, edgeG);
 Rect edge4(&green_material, poolB, poolA, edgeG, edgeF);
 
-
 Ellipsoid ellipsoid(&orange_material);
 
-C background[windowWidth * windowHeight];
-// Initialization, create an OpenGL context
+
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
-//	static V background[windowWidth * windowHeight];
-	
+
 	rt.scene.objects.PushBack(&part1);
 	rt.scene.objects.PushBack(&part2);
 	rt.scene.objects.PushBack(&part3);
 	rt.scene.objects.PushBack(&part4);
 	rt.scene.objects.PushBack(&part5);
-
 	rt.scene.objects.PushBack(&water);
-
 	rt.scene.objects.PushBack(&edge1);
 	rt.scene.objects.PushBack(&edge2);
 	rt.scene.objects.PushBack(&edge3);
 	rt.scene.objects.PushBack(&edge4);
 
-//	ellipsoid.Streching(V(6, 1, 1));
+	ellipsoid.Translation(V(1, 0, 0)).Streching(V(2, 1, 3));
 	rt.scene.objects.PushBack(&ellipsoid);
 
-	rt.scene.lights.PushBack(&light);
-	rt.scene.lights.PushBack(&light2);
+	rt.scene.lights.PushBack(&ambient);
+	rt.scene.lights.PushBack(&directional);
 
-	rt.TraceM(background);
-
-	fullScreenTexturedQuad.Create(background);
+	rt.Trace(image);
+	fullScreenTexturedQuad.Create(image);
 
 	// Create vertex shader from string
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
@@ -1085,37 +941,6 @@ void onDisplay() {
 	glutSwapBuffers();									// exchange the two buffers
 }
 
-struct Quaternion {
-	f w, i, j, k;
-
-	Quaternion() : w(0.0f), i(1.0f), j(0.0f), k(0.0f) {}
-	Quaternion(f w, f i, f j, f k) : w(w), i(i), j(j), k(k) {}
-
-	Quaternion operator * (const Quaternion& q) {
-		Quaternion ret;
-		ret.w = w * q.w - i * q.i - j * q.j - k * q.k;
-		ret.i = w * q.i + i * q.w + j * q.k - k * q.j;
-		ret.j = w * q.j - i * q.k + j * q.w + k * q.i;
-		ret.k = w * q.k + i * q.j - j * q.i + k * q.w;
-		return ret;
-	}
-
-	Quaternion Inverse() { return Quaternion(w, -i, -j, -k); }
-};
-
-
-V RotateAroundAxis(const V& point, const V& axis, const f angle) {
-	Quaternion vec(0, point.v[0], point.v[1], point.v[2]);
-	Quaternion rot;
-	rot.w = cosf(angle / 2.0f);
-	rot.i = axis.v[0] * -sinf(angle / 2.0f);
-	rot.j = axis.v[1] * -sinf(angle / 2.0f);
-	rot.k = axis.v[2] * -sinf(angle / 2.0f);
-
-	vec = (rot * vec) * rot.Inverse();
-
-	return V(vec.i, vec.j, vec.k);
-}
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
 	glutPostRedisplay();
