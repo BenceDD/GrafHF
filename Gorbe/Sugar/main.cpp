@@ -809,14 +809,15 @@ public:
 	}
 };
 
-class SmoothMaterial {
+
+class SmoothMaterial : public Material {
 	V F0;
 	float n;
 public:
-	V reflect(const V& inDir, const V& normal) {
+	inline V reflect(const V& inDir, const V& normal) const {
 		return inDir - normal * (normal * inDir) * 2.0f;
 	}
-	V refract(const V& inDir, const V& normal) {
+	inline V refract(const V& inDir, const V& normal) const {
 		f ior = n;
 		f cosa = -(normal * inDir);
 		if (cosa < 0)
@@ -831,9 +832,15 @@ public:
 		return inDir / ior + normal_inv * (cosa / ior - sqrt(disc));
 	}
 
-	V Fresnel(const V& inDir, const V& normal) {
+	inline V Fresnel(const V& inDir, const V& normal) const {
 		f cosa = fabs(normal * inDir);
 		return F0 + (V(1, 1, 1) - F0) * pow(1 - cosa, 5);
+	}
+
+	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
+		C ret;
+
+		return ret;
 	}
 };
 
