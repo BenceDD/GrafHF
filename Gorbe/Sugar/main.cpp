@@ -232,6 +232,11 @@ struct C {
 	C operator- (const f scalar) const {
 		return C(v.v[0] - scalar, v.v[1] - scalar, v.v[2] - scalar);
 	}
+
+	C friend operator- (const f scalar, const C& c) {
+		return C(scalar - c.v.v[0], scalar - c.v.v[0], scalar - c.v.v[0]);
+	}
+
 	C& operator += (const C& rhs) {
 		v += rhs.v;
 		return *this;
@@ -779,8 +784,20 @@ public:
 
 
 class ReflectiveMaterial : public Material {
-	inline V reflect(V I, V N) const {
+	const C F0;
+	/*
+	ReflectiveMaterial(const C& n, const C& k)
+		: F0(((n - 1)*(n - 1) + k*k) /
+			((n + 1)*(n + 1) + k*k)) {}
+	
+	*/
+
+	inline V reflect(const V& I, const V& N) const {
 		return I - (N * (2.0 * (N * I)));
+	}
+
+	inline C Fresnel(f cosTheta) const {
+		return F0 + (1 - F0) * pow(1 - cosTheta, 5);
 	}
 
 public:
@@ -788,31 +805,35 @@ public:
 		Ray reflected_ray;
 		reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
 		reflected_ray.origin = hit.Position() + (reflected_ray.dir * 1e-3);
-		return scene.GetColor(reflected_ray, rl + 1);
+		return Fresnel(-hit.ray.dir * hit.SurfaceNormal()) * scene.GetColor(reflected_ray, rl + 1);
 	}
 };
 
+class SmoothMaterial {
+	V F0;
+	float n;
+public:
+	V reflect(const V& inDir, const V& normal) {
+		return inDir - normal * (normal * inDir) * 2.0f;
+	}
+	V refract(const V& inDir, const V& normal) {
+		f ior = n;
+		f cosa = -(normal * inDir);
+		if (cosa < 0)
+			cosa = -cosa;
+		V normal_inv = -normal;
+		ior = 1 / n;
 
-struct ReflectiveMaterial2 : public Material {
-	const C F0;
+		f disc = 1 - (1 - cosa * cosa) / ior / ior;
+		if (disc < 0)
+			return reflect(inDir, normal_inv);
 
-	inline V reflect(V I, V N) const {
-		return I - (N * (2.0 * (N * I)));
+		return inDir / ior + normal_inv * (cosa / ior - sqrt(disc));
 	}
 
-	ReflectiveMaterial2(const C& n, const C& k)
-		: F0(((n - 1)*(n - 1) + k*k) /
-			((n + 1)*(n + 1) + k*k)) {}
-
-	C F(float cosTheta) {
-		return F0 + (1 - F0) * pow(1 - cosTheta, 5);
-	}
-
-	C getColor(const Scene& scene, const Intersection& hit, const Light* lgts, size_t lgt_num, int recursion_level) {
-		Ray reflected_ray;
-		reflected_ray.dir = reflect(hit.ray.dir, hit.normal);
-		reflected_ray.origin = hit.pos + 1e-3*reflected_ray.dir;
-		return F(dot(-hit.ray.dir, hit.normal))* scene.shootRay(reflected_ray, recursion_level + 1);
+	V Fresnel(const V& inDir, const V& normal) {
+		f cosa = fabs(normal * inDir);
+		return F0 + (V(1, 1, 1) - F0) * pow(1 - cosa, 5);
 	}
 };
 
