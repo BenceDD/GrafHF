@@ -456,13 +456,13 @@ public:
 
 	inline C GetColor(const Ray& ray, const int rl = 0) const {
 		if (rl > rec_limit)
-			return background;
+			return C();
 
 		Intersection h = ShootRay(ray);
 		if (h.obj != NULL)
 			return h.obj->GetMaterial()->GetColor(*this, h, rl + 1);
 		else
-			return C();
+			return background;
 	}
 
 	inline bool IsVisible(const Light* light, const Intersection& hit) const {
@@ -841,8 +841,7 @@ public:
 	}
 
 	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
-
-		C F = Fresnel(hit.ray.dir, hit.SurfaceNormal);
+		C F = Fresnel(hit.ray.dir, hit.SurfaceNormal());
 
 		Ray reflected_ray;
 		reflected_ray.dir = reflect(hit.ray.dir, hit.SurfaceNormal());
@@ -850,7 +849,7 @@ public:
 		C ret = F * scene.GetColor(reflected_ray, rl + 1);
 
 		Ray refracted_ray;
-		refracted_ray.dir = refract(hit.ray.dir, hit.SurfaceNormal);
+		refracted_ray.dir = refract(hit.ray.dir, hit.SurfaceNormal());
 		refracted_ray.origin = hit.Position() + (refracted_ray.dir * 1e-3);
 		ret += F * scene.GetColor(refracted_ray, rl + 1);
 
@@ -953,17 +952,16 @@ FullScreenTexturedQuad fullScreenTexturedQuad;
 
 // szükséges dolgok..
 Camera camera(windowWidth, windowHeight);
-Scene scene(camera, Color::Grey);
+Scene scene(camera, Color::Cyan);
 RayTracer rt(scene);
-
 
 // a kompozíció
 SpecularMaterial blue_material(Color::Cyan);
 DiffuseMaterial green_material(Color::Green);
 
-SpecularMaterial smooth_material(Color::Orange);
+SmoothMaterial smooth_material;
 
-Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::White *0.1);
+Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::Cyan);
 Light light2(Light::Point, V(0, 20, 0), V(0, -1, 0), Color::White * 1000);
 
 V poolA(-25, 0, -5);
