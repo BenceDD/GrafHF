@@ -207,25 +207,54 @@ struct V {
 	}
 };
 
+
+struct C {
+	V v;
+	C() { }
+	explicit C(const f r, const f g, const f b) : v(r, g, b){ }
+	explicit C(const V& v) : v(v) { }
+	operator f*() { return &v.v[0]; }
+	C operator* (const f scalar) const {
+		return C(v * scalar);
+	}
+	C operator* (const C& rhs) const {
+		return C(v.v[0] * rhs.v.v[0], v.v[1] * rhs.v.v[1], v.v[2] * rhs.v.v[2]);
+	}
+	C operator/ (const C& rhs) const {
+		return C(v.v[0] / rhs.v.v[0], v.v[1] / rhs.v.v[1], v.v[2] / rhs.v.v[2]);
+	}
+	C operator+ (const C& rhs) const {
+		return C(v + rhs.v);
+	}
+	C operator+ (const f scalar) const {
+		return C(v.v[0] + scalar, v.v[1] + scalar, v.v[2] + scalar);
+	}
+	C operator- (const f scalar) const {
+		return C(v.v[0] - scalar, v.v[1] - scalar, v.v[2] - scalar);
+	}
+	C& operator += (const C& rhs) {
+		v += rhs.v;
+		return *this;
+	}
+	C Saturate() const { return C(v.v[0] < 1 ? v.v[0] : 1, v.v[1] < 1 ? v.v[1] : 1, v.v[2] < 1 ? v.v[2] : 1); }
+};
+
+
 namespace Color {
-	const V Red = V(1, 0, 0); 
-	const V Green = V(0, 1, 0); 
-	const V Blue = V(0, 0, 1); 
+	const C Red = C(1, 0, 0);
+	const C Green = C(0, 1, 0);
+	const C Blue = C(0, 0, 1);
 
-	const V Yellow = V(1, 1, 0); 
-	const V Pink = V(1, 0, 1);
-	const V Cyan = V(0, 1, 1);
+	const C Yellow = C(1, 1, 0);
+	const C Pink = C(1, 0, 1);
+	const C Cyan = C(0, 1, 1);
 
-	const V Orange = V(1, 0.5, 0); 
-	const V Purple = V(0.5, 0, 1); 
-	
-	const V Grey = V(0.5, 0.5, 0.5); 
-	const V DarkGrey = V(0.1, 0.1, 0.1); 
-	const V White = V(1, 1, 1);
-	
+	const C Orange = C(1, 0.5, 0);
+	const C Purple = C(0.5, 0, 1);
 
-	V Product (const V& l, const V& h) { return V(l.v[0] * h.v[0], l.v[1] * h.v[1], l.v[2] * h.v[2]); }
-	V Saturate(const V& color) { return V(color.v[0] < 1 ? color.v[0] : 1, color.v[1] < 1 ? color.v[1] : 1, color.v[2] < 1 ? color.v[2] : 1); }
+	const C Grey = C(0.5, 0.5, 0.5);
+	const C DarkGrey = C(0.1, 0.1, 0.1);
+	const C White = C(1, 1, 1);
 }
 
 // row-major matrix 4x4
@@ -303,10 +332,10 @@ V operator*(const V& vec, const M& mat) {
 struct Light {
 	enum LightType { Ambient, Directional, Point } type;
 	V pos, dir;
-	V color;
+	C color;
 
 	Light() : type(Light::Ambient), color(Color::White) {}
-	Light(Light::LightType type, V pos, V dir, V c)
+	Light(Light::LightType type, V pos, V dir, C c)
 		: type(type), pos(pos), dir(dir.Normal()), color(c) {}
 };
 
@@ -388,7 +417,7 @@ struct Intersection {
 
 
 struct Material {
-	virtual V GetColor(const Scene&, const Intersection&, const int) const = 0;
+	virtual C GetColor(const Scene&, const Intersection&, const int) const = 0;
 	virtual ~Material() {}
 };
 
@@ -399,9 +428,9 @@ public:
 	SimpleArray<Object*, array_size> objects;
 	SimpleArray<Light*, array_size> lights;
 	Camera& camera;
-	const V background;
+	const C background;
 
-	Scene(Camera& cam, const V& bg, const int rl = 10) : camera(cam), background(bg), rec_limit(rl) {}
+	Scene(Camera& cam, const C& bg, const int rl = 10) : camera(cam), background(bg), rec_limit(rl) {}
 
 	inline Intersection ShootRay(const Ray& ray) const {
 		Intersection ret(ray, NULL, -1);
@@ -417,7 +446,7 @@ public:
 		return ret;
 	}
 
-	inline V GetColor(const Ray& ray, const int rl = 0) const {
+	inline C GetColor(const Ray& ray, const int rl = 0) const {
 		if (rl > rec_limit)
 			return background;
 
@@ -425,7 +454,7 @@ public:
 		if (h.obj != NULL)
 			return h.obj->GetMaterial()->GetColor(*this, h, rl + 1);
 		else
-			return V();
+			return C();
 	}
 
 	inline bool IsVisible(const Light* light, const Intersection& hit) const {
@@ -448,7 +477,7 @@ public:
 
 	RayTracer(Scene& s) : camera(s.camera), scene(s) {}
 
-	void Trace(V* img) {
+	void Trace(C* img) {
 		long time = glutGet(GLUT_ELAPSED_TIME);
 		for (int i = 0; i < camera.height; i++) {
 			for (int j = 0; j < camera.width; j++) {
@@ -459,7 +488,7 @@ public:
 		printf("Tracing takes %f s", elapsed);
 	}
 
-	void TraceM(V* img, int n = 8) const {
+	void TraceM(C* img, int n = 8) const {
 		long time = glutGet(GLUT_ELAPSED_TIME);
 		std::vector<std::thread> threads;
 		std::mutex m;
@@ -652,16 +681,16 @@ public:
 
 
 class DiffuseMaterial : public Material {
-	V color;
+	C color;
 public:
-	DiffuseMaterial(const V& c) : color(c) {}
+	DiffuseMaterial(const C& c) : color(c) {}
 
-	V GetColor(const Scene& scene, const Intersection& hit, const int) const {
-		V ret;
+	C GetColor(const Scene& scene, const Intersection& hit, const int) const {
+		C ret;
 		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
 			switch (scene.lights[i]->type) {
 				case Light::Ambient: {
-						ret += Color::Product(scene.lights[i]->color, color);
+						ret += scene.lights[i]->color * color;
 						break;
 					}
 				case Light::Directional: {
@@ -669,7 +698,7 @@ public:
 							f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
 							if (intensity < 0)
 								intensity = 0;
-							ret += (Color::Product(scene.lights[i]->color,  color) * intensity);
+							ret += scene.lights[i]->color *  color * intensity;
 						}
 						break;
 					}
@@ -679,7 +708,7 @@ public:
 							f attenuation = pow(1 / pos_to_light.Length(), 2);
 							f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
 							float intensity = tmp > 0 ? tmp : 0;
-							ret += Color::Product(scene.lights[i]->color, color) * attenuation * intensity;
+							ret += scene.lights[i]->color * color * attenuation * intensity;
 						}
 						break;
 					}
@@ -691,30 +720,30 @@ public:
 
 
 class SpecularMaterial : public Material {
-	V color;
+	C color;
 	f shininess;
 
 public:
-	SpecularMaterial(const V& c) : color(c) {
+	SpecularMaterial(const C& c) : color(c) {
 		shininess = 32;
 	}
 
-	V GetColor(const Scene& scene, const Intersection& hit, const int) const {
-		V ret;
+	C GetColor(const Scene& scene, const Intersection& hit, const int) const {
+		C ret;
 		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
 			switch (scene.lights[i]->type) {
 				case Light::Ambient: {
-						ret += Color::Product(scene.lights[i]->color, color);
+						ret += scene.lights[i]->color * color;
 						break;
 					}
 				case Light::Directional: {
-						V specular_color;
+						C specular_color;
 
 						if (scene.IsVisible(scene.lights[i], hit)) {
 							f intensity = hit.obj->Normal(hit.Position()) * scene.lights[i]->dir.Normal();
 							if (intensity < 0)
 								intensity = 0;
-							specular_color = Color::Product(scene.lights[i]->color, color) * intensity;
+							specular_color = scene.lights[i]->color * color * intensity;
 						}
 						ret += specular_color;
 						break;
@@ -726,7 +755,7 @@ public:
 							f attenuation = pow(1 / pos_to_light.Length(), 2);
 							f tmp = hit.SurfaceNormal() * pos_to_light.Normal();
 							float intensity = tmp > 0 ? tmp : 0;
-							V specular_color = Color::Product(scene.lights[i]->color, color) * attenuation * intensity;
+							C specular_color = scene.lights[i]->color * color * attenuation * intensity;
 							ret += specular_color;
 
 							// Spekuláris számítás
@@ -738,7 +767,7 @@ public:
 							d = d > 0 ? d : 0;
 
 							float specular_power = pow(d, shininess);
-							ret += Color::Product(scene.lights[i]->color * specular_power, specular_color * 0.2);
+							ret += (scene.lights[i]->color * specular_power) * (specular_color * 0.2);
 						}
 						break;
 					}
@@ -755,8 +784,8 @@ class ReflectiveMaterial : public Material {
 	}
 
 public:
-	V GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
-		V ret;
+	C GetColor(const Scene& scene, const Intersection& hit, const int rl) const {
+		C ret;
 		for (int i = 0; i < scene.lights.CurrentSize(); ++i) {
 			switch (scene.lights[i]->type) {
 				case Light::Ambient: {
@@ -780,14 +809,85 @@ public:
 	}
 };
 
+/*
+struct ReflectiveMaterial2 : public Material {
+	const C F0;
 
+	inline V reflect(V I, V N) const {
+		return I - (N * (2.0 * (N * I)));
+	}
+
+	ReflectiveMaterial2(const C& n, const C& k)
+		: F0(((n - 1)*(n - 1) + k*k) /
+			((n + 1)*(n + 1) + k*k)) {}
+
+	C F(float cosTheta) {
+		return F0 + (1 - F0) * pow(1 - cosTheta, 5);
+	}
+
+	C getColor(Intersection inter, const Light* lgts, size_t lgt_num, int recursion_level) {
+		Ray reflected_ray;
+		reflected_ray.dir = reflect(inter.ray.dir, inter.normal);
+		reflected_ray.origin = inter.pos + 1e-3*reflected_ray.dir;
+		return F(dot(-inter.ray.dir, inter.normal))
+			* scene.shootRay(reflected_ray, recursion_level + 1);
+	}
+};
+*/
+
+/*
+struct RefractiveMaterial : public ReflectiveMaterial {
+	f n, n_rec;
+
+	inline V refract(V I, V N, double n) {
+		double k = 1.0 - n * n * (1.0 - dot(N, I) * dot(N, I));
+		if (k < 0.0) {
+			return V();
+		} else {
+			return n * I - (n * dot(N, I) + sqrt(k)) * N;
+		}
+	}
+
+	RefractiveMaterial(float n, V k, V specular_color, float shininess) : ReflectiveMaterial(n, k, specular_color, shininess), n(n), n_rec(1 / n) {}
+
+	V getColor(Intersection inter, const Light* lgts, size_t lgt_num, int recursion_level) {
+		if (dot(inter.ray.direction, inter.normal) > 0) {
+			inter.normal = -inter.normal;
+		}
+
+		Ray reflected;
+		reflected.direction = reflect(inter.ray.direction, inter.normal);
+		reflected.origin = inter.pos + 1e-3*reflected.direction;
+
+		Color reflectedColor, refractedColor;
+
+		Ray refracted;
+		refracted.direction = refract(inter.ray.direction, inter.normal, inter.ray.in_air ? n : n_rec);
+		if (!refracted.direction.isNull()) {
+			refracted.origin = inter.pos + 1e-3 * refracted.direction;
+			refracted.in_air = !inter.ray.in_air;
+
+			V F_vec = F(dot(-inter.ray.direction, inter.normal));
+			reflectedColor = F_vec * scene.shootRay(reflected, recursion_level + 1)
+				+ getSpecularHighlight(inter, lgts, lgt_num, reflected.travelled_dist, false);
+			refractedColor = (1 - F_vec) * scene.shootRay(refracted, recursion_level + 1);
+		} else {
+			reflectedColor = scene.shootRay(reflected, recursion_level + 1)
+				+ getSpecularHighlight(inter, lgts, lgt_num, reflected.travelled_dist, true);
+		}
+
+		return reflectedColor + refractedColor;
+	}
+};
+
+*/
 // handle of the shader program
 unsigned int shaderProgram;
 
 class FullScreenTexturedQuad {
 	unsigned int vao, textureId;	// vertex array object id and texture id
 public:
-	void Create(V image[windowWidth * windowHeight]) {
+	void Create(C image[windowWidth * windowHeight]) {
 		glGenVertexArrays(1, &vao);	// create 1 vertex array object
 		glBindVertexArray(vao);		// make it active
 
@@ -869,7 +969,7 @@ Rect edge2(&green_material, poolE, poolF, edgeB, edgeC);
 Rect edge3(&green_material, edgeC, edgeD, edgeH, edgeG);
 Rect edge4(&green_material, poolB, poolA, edgeG, edgeF);
 
-V background[windowWidth * windowHeight];
+C background[windowWidth * windowHeight];
 // Initialization, create an OpenGL context
 void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
@@ -987,33 +1087,7 @@ V RotateAroundAxis(const V& point, const V& axis, const f angle) {
 }
 // Key of ASCII code pressed
 void onKeyboard(unsigned char key, int pX, int pY) {
-	/*
-	if (key == 'a' || key == 'w' || key == 's' || key == 'd') {
-		V org_pos = rt.scene.camera.GetPosition();
-		f angle = 0.2;
-
-		if (key == 'a' || key == 'd') {
-			if (key == 'd')
-				angle = -angle;
-			org_pos = RotateAroundAxis(org_pos, V(0, 1, 0), angle);
-		} else {
-			if (key == 's')
-				angle = -angle;
-			org_pos = RotateAroundAxis(org_pos, V(1, 0, 0), angle);
-		}
-		rt.scene.camera.SetState(org_pos, -org_pos);
-	}
-*/
-
-
-	if (key == 'a')
-		light.color = light.color * 5.;
-	if (key == 's')
-		light.color = light.color / 5.;
-
-	rt.TraceM(background);
 	glutPostRedisplay();
-
 }
 
 // Key of ASCII code released
