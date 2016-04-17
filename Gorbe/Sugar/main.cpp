@@ -226,6 +226,9 @@ struct C {
 	C operator+ (const C& rhs) const {
 		return C(v + rhs.v);
 	}
+	C operator- (const C& rhs) const {
+		return C(v - rhs.v);
+	}
 	C operator+ (const f scalar) const {
 		return C(v.v[0] + scalar, v.v[1] + scalar, v.v[2] + scalar);
 	}
@@ -947,6 +950,8 @@ RayTracer rt(scene);
 SpecularMaterial blue_material(Color::Cyan);
 DiffuseMaterial green_material(Color::Green);
 
+SpecularMaterial smooth_material(Color::Orange);
+
 Light light(Light::Ambient, V(1.5, 1.5, 1.5), V(-1, -1, -1), Color::White *0.1);
 Light light2(Light::Point, V(0, 20, 0), V(0, -1, 0), Color::White * 1000);
 
@@ -964,6 +969,13 @@ Rect part2(&blue_material, poolB, poolF, poolG, poolC);
 Rect part3(&blue_material, poolE, poolH, poolG, poolF);
 Rect part4(&blue_material, poolA, poolD, poolH, poolE);
 Rect part5(&blue_material, poolG, poolH, poolD, poolC);
+
+V waterA(-25, -0.5, -5);
+V waterB(-25, -0.5, 5);
+V waterC(25, -0.5, 5);
+V waterD(25, -0.5, -5);
+
+Rect water(&smooth_material, waterA, waterB, waterC, waterD);
 
 V edgeA(100, 0, 100);
 V edgeB(100, 0, 5);
@@ -985,25 +997,21 @@ void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 //	static V background[windowWidth * windowHeight];
 	
-
-
 	rt.scene.objects.PushBack(&part1);
 	rt.scene.objects.PushBack(&part2);
 	rt.scene.objects.PushBack(&part3);
 	rt.scene.objects.PushBack(&part4);
 	rt.scene.objects.PushBack(&part5);
 
+	rt.scene.objects.PushBack(&water);
+
 	rt.scene.objects.PushBack(&edge1);
 	rt.scene.objects.PushBack(&edge2);
 	rt.scene.objects.PushBack(&edge3);
 	rt.scene.objects.PushBack(&edge4);
 
-
 	rt.scene.lights.PushBack(&light);
 	rt.scene.lights.PushBack(&light2);
-
-
-
 
 	rt.TraceM(background);
 
