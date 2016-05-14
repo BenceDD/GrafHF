@@ -298,25 +298,10 @@ public:
 		glUniformMatrix4fv(loc, 1, GL_TRUE, &m[0][0]);
 	}
 
-	M4 Scale(const V3& vec) const {
-		M4 M(*this);
-		return M * Scaling(vec);
-	}
-
-	M4 Translate(const V3& v) const {
-		M4 M(*this);
-		return M * Translation(v);
-	}
-
-	M4 Rotate(f angle, const V3& axis) const {
-		M4 M(*this);
-		return M * Rotation(angle, axis);
-	}
-
 	static M4 I() { return M4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
-	static M4 Scaling(const V3& vec) { return M4(vec.x, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, 1); }
-	static M4 Translation(const V3& vec) {return M4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, vec.x, vec.y, vec.z, 1);}
-	static M4 Rotation(f angle, const V3& w) {
+	static M4 Scale(const V3& vec) { return M4(vec.x, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, 1); }
+	static M4 Translate(const V3& vec) {return M4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, vec.x, vec.y, vec.z, 1); }
+	static M4 Rotate(f angle, const V3& w) {
 		return M4( // Rodrigues matrix
 			1 - (w.x * w.x - 1) * (cosf(angle) - 1), -w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), w.y * sinf(angle) - w.x * w.z * (cosf(angle) - 1), 0,
 			w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), 1 - (w.y * w.y - 1) * (cosf(angle) - 1), -w.x * sinf(angle) - w.y * w.z * (cosf(angle) - 1), 0,
@@ -447,12 +432,12 @@ public:
 };
 
 void Draw() {
-	M4 M = M4::Scaling(scale) *
-		M4::Rotation(rotAng, rotAxis) *
-		M4::Translation(pos);
-	M4 Minv = M4::Translation(pos) *
-		M4::Rotation(-rotAngle, rotAxis) *
-		M4::Scaling(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+	M4 M = M4::Scale(scale) *
+		M4::Rotate(rotAng, rotAxis) *
+		M4::Translate(pos);
+	M4 Minv = M4::Translate(pos) *
+		M4::Rotate(-rotAngle, rotAxis) *
+		M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
 	M4 MVP = M * camera.V() * camera.P();
 
 	M.SetUniform(shaderProg, "M");
@@ -523,8 +508,8 @@ class Object {
 
 public:
 	virtual void Draw(RenderState state) {
-		state.M = M4::Scaling(scale) * M4::Rotation(rotAngle, rotAxis) * M4::Translation(pos);
-		state.Minv = M4::Translation(-pos) * M4::Rotation(-rotAngle, rotAxis) * M4::Scaling(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+		state.M = M4::Scale(scale) * M4::Rotate(rotAngle, rotAxis) * M4::Translate(pos);
+		state.Minv = M4::Translate(-pos) * M4::Rotate(-rotAngle, rotAxis) * M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
 		state.material = material;
 		state.texture = texture;
 		shader->Bind(state);
