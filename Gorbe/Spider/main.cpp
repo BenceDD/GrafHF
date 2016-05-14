@@ -300,28 +300,30 @@ public:
 
 	M4 Scale(const V3& vec) const {
 		M4 M(*this);
-		M.m[0][0] *= vec.x;
-		M.m[1][1] *= vec.y;
-		M.m[2][2] *= vec.z;
-		return M;
+		return M * Scaling(vec);
 	}
 
 	M4 Translate(const V3& v) const {
 		M4 M(*this);
-		M.m[3][0] = v.x;
-		M.m[3][1] = v.y;
-		M.m[3][2] = v.z;
-		return M;
+		return M * Translation(v);
 	}
 
 	M4 Rotate(f angle, const V3& axis) const {
-		// TODO!!
+		M4 M(*this);
+		return M * Rotation(angle, axis);
 	}
 
 	static M4 I() { return M4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
-	static M4 Scaling(const V3& vec) { return I().Scale(vec); }
-	static M4 Translation(const V3& vec) { return I().Translate(vec); }
-	static M4 Rotation(f angle, const V3& vec) { return I().Rotate(angle, vec); }
+	static M4 Scaling(const V3& vec) { return M4(vec.x, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, 1); }
+	static M4 Translation(const V3& vec) {return M4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, vec.x, vec.y, vec.z, 1);}
+	static M4 Rotation(f angle, const V3& w) {
+		return M4( // Rodrigues matrix
+			1 - (w.x * w.x - 1) * (cosf(angle) - 1), -w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), w.y * sinf(angle) - w.x * w.z * (cosf(angle) - 1), 0,
+			w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), 1 - (w.y * w.y - 1) * (cosf(angle) - 1), -w.x * sinf(angle) - w.y * w.z * (cosf(angle) - 1), 0,
+			-w.y * sinf(angle) - w.x * w.z * (cosf(angle) - 1), w.x * sinf(angle) - w.y * w.z * (cosf(angle) - 1), 1 - (w.z * w.z - 1) * (cosf(angle) - 1), 0,
+			0, 0, 0, 1
+			);
+	}
 };
 
 
@@ -429,7 +431,7 @@ public:
 		V3 w = (wEye - wLookat).Normal();
 		V3 u = (wVup % w).Normal();
 		V3 v = w % u;
-		return M4::I().Translate(-wEye.x, -wEye.y, -wEye.z) *
+		return M4::I().Translate(V3(-wEye.x, -wEye.y, -wEye.z)) *
 			M4(u.x, v.x, w.x, 0.0f,
 				u.y, v.y, w.y, 0.0f,
 				u.z, v.z, w.z, 0.0f,
@@ -511,46 +513,6 @@ public:
 	}
 };
 
-
-class SmoothMaterial : public Material {
-	V3 F0;	// F0
-	f n;	// n
-public:
-	V3 reflect(V3 inDir, V3 normal) {
-		return inDir - normal * (normal * inDir) * 2.0f;
-	}
-	V3 refract(V3 inDir, V3 normal) {
-		f ior = n;
-		f cosa = -(normal * inDir);
-		if (cosa < 0) { cosa = -cosa; normal = -normal; ior = 1 / n; }
-		f disc = 1 - (1 - cosa * cosa) / ior / ior;
-		if (disc < 0) return reflect(inDir, normal);
-		return inDir / ior + normal * (cosa / ior - sqrt(disc));
-	}
-	V3 Fresnel(V3 inDir, V3 normal) {
-		f cosa = fabs(normal * inDir);
-		return F0 + (V3(1, 1, 1) - F0) * pow(1 - cosa, 5);
-	}
-};
-
-class RoughMaterial : public Material {
-	V3 kd, ks;
-	f shininess;
-public:
-	V3 shade(V3 normal, V3 viewDir, V3 lightDir,
-		V3 inRad) {
-		V3 reflRad(0, 0, 0);
-		f cosTheta = normal * lightDir;
-		if (cosTheta < 0) return reflRad;
-		reflRad = inRad * kd * cosTheta;
-		V3 halfway = (viewDir + lightDir).Normal();
-		f cosDelta = normal * halfway;
-		if (cosDelta < 0) return reflRad;
-		return reflRad + inRad * ks * pow(cosDelta, shininess);
-	}
-};
-
-
 class Object {
 	Shader * shader;
 	Material * material;
@@ -569,6 +531,8 @@ public:
 		geometry->Draw();
 	}
 	virtual void Animate(f dt) {}
+
+
 };
 
 struct Shader {
