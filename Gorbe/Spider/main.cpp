@@ -475,6 +475,21 @@ struct Texture {
 	}
 };
 
+class Material {
+	// ???
+};
+
+struct Light {
+	// ???
+};
+
+struct RenderState {
+	V3 wEye;
+	M4 M, V, P, Minv;
+	Light light;
+	Texture* texture;
+	Material* material;
+};
 
 class Scene {
 	Camera camera;
@@ -497,9 +512,7 @@ public:
 };
 
 
-class Material;
-
-class SmoothMaterial {
+class SmoothMaterial : public Material {
 	V3 F0;	// F0
 	f n;	// n
 public:
@@ -520,7 +533,7 @@ public:
 	}
 };
 
-class RoughMaterial {
+class RoughMaterial : public Material {
 	V3 kd, ks;
 	f shininess;
 public:
@@ -548,8 +561,8 @@ class Object {
 
 public:
 	virtual void Draw(RenderState state) {
-		state.M = Scale(scale.x, scale.y, scale.z) * Rotate(rotAngle, rotAxis.x, rotAxis.y, rotAxis.z) * Translate(pos.x, pos.y, pos.z);
-		state.Minv = Translate(-pos.x, -pos.y, -pos.z) * Rotate(-rotAngle, rotAxis.x, rotAxis.y, rotAxis.z) * Scale(1 / scale.x, 1 / scale.y, 1 / scale.z);
+		state.M = M4::Scaling(scale) * M4::Rotation(rotAngle, rotAxis) * M4::Translation(pos);
+		state.Minv = M4::Translation(-pos) * M4::Rotation(-rotAngle, rotAxis) * M4::Scaling(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
 		state.material = material;
 		state.texture = texture;
 		shader->Bind(state);
