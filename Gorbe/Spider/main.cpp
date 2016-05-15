@@ -468,9 +468,9 @@ struct Texture {
 
 		for (int i = 0; i < width; i++) {
 			for (int j = 0; j < height; j++) {
-				img[i * height + j] = (float)i / (float)width;
-				img[i * height + j] = (float)j / (float)height;
-				img[i * height + j] = 0.5f;
+				img[(i * height + j) * 3] = (float)i / (float)width;
+				img[(i * height + j) * 3 + 1] = (float)j / (float)height;
+				img[(i * height + j) * 3 + 2] = 0.5f;
 			}
 		}
 
@@ -710,7 +710,7 @@ void onIdle() {
 // Idaig modosithatod...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-int main( int argc, char * argv[] ) {
+int main(int argc, char * argv[]) {
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
