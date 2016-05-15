@@ -227,7 +227,7 @@ struct V3 {
 	}
 
 	friend V3 operator+ (const V3& l, const V3& r) {
-		return V(l.x + r.x, l.y + r.y, l.z + r.z;
+		return V3(l.x + r.x, l.y + r.y, l.z + r.z);
 	}
 
 	friend V3 operator- (const V3& l, const V3& r) {
@@ -254,15 +254,6 @@ struct V4 {
 
 	V4(f x = 0, f y = 0, f z = 0, f w = 1) {
 		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
-	}
-
-	V4 operator*(const M4& mat) {
-		V4 result;
-		for (int j = 0; j < 4; j++) {
-			result.v[j] = 0;
-			for (int i = 0; i < 4; i++) result.v[j] += v[i] * mat.m[i][j];
-		}
-		return result;
 	}
 };
 
@@ -301,15 +292,24 @@ public:
 	static M4 I() { return M4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
 	static M4 Scale(const V3& vec) { return M4(vec.x, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, 1); }
 	static M4 Translate(const V3& vec) {return M4(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, vec.x, vec.y, vec.z, 1); }
-	static M4 Rotate(f angle, const V3& w) {
+	static M4 Rotate(const f angle, const V3& axis) {
 		return M4( // Rodrigues matrix
-			1 - (w.x * w.x - 1) * (cosf(angle) - 1), -w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), w.y * sinf(angle) - w.x * w.z * (cosf(angle) - 1), 0,
-			w.z * sinf(angle) - w.x * w.y * (cosf(angle) - 1), 1 - (w.y * w.y - 1) * (cosf(angle) - 1), -w.x * sinf(angle) - w.y * w.z * (cosf(angle) - 1), 0,
-			-w.y * sinf(angle) - w.x * w.z * (cosf(angle) - 1), w.x * sinf(angle) - w.y * w.z * (cosf(angle) - 1), 1 - (w.z * w.z - 1) * (cosf(angle) - 1), 0,
+			1 - (axis.x * axis.x - 1) * (cosf(angle) - 1), -axis.z * sinf(angle) - axis.x * axis.y * (cosf(angle) - 1), axis.y * sinf(angle) - axis.x * axis.z * (cosf(angle) - 1), 0,
+			axis.z * sinf(angle) - axis.x * axis.y * (cosf(angle) - 1), 1 - (axis.y * axis.y - 1) * (cosf(angle) - 1), -axis.x * sinf(angle) - axis.y * axis.z * (cosf(angle) - 1), 0,
+			-axis.y * sinf(angle) - axis.x * axis.z * (cosf(angle) - 1), axis.x * sinf(angle) - axis.y * axis.z * (cosf(angle) - 1), 1 - (axis.z * axis.z - 1) * (cosf(angle) - 1), 0,
 			0, 0, 0, 1
-			);
+		);
 	}
 };
+
+V4 operator*(const V4 v, const M4& mat) {
+	V4 result;
+	for (int j = 0; j < 4; j++) {
+		result.v[j] = 0;
+		for (int i = 0; i < 4; i++) result.v[j] += v.v[i] * mat.m[i][j];
+	}
+	return result;
+}
 
 
 struct VertexData {
@@ -425,6 +425,8 @@ public:
 	}
 };
 
+Camera camera;
+
 //void Draw() {
 //	M4 M = M4::Scale(scale) *
 //		M4::Rotate(rotAng, rotAxis) *
@@ -494,52 +496,9 @@ struct RenderState {
 	Material* material;
 };
 
-class Scene {
-	Camera camera;
-	std::vector<Object*> objects;
-	Light light;
-	RenderState state;
-
-public:
-	void Render() {
-		state.wEye = camera.wEye;
-		state.V = camera.V;
-		state.P = camera.P;
-		state.light = light;
-		for (Object * obj : objects) obj->Draw(state);
-	}
-
-	void Animate(f dt) {
-		for (Object * obj : objects) obj->Animate(dt);
-	}
-};
-
-class Object {
-	Shader * shader;
-	Material * material;
-	Texture * texture;
-	Geometry * geometry;
-	V3 scale, pos, rotAxis;
-	f rotAngle;
-
-public:
-	virtual void Draw(RenderState state) {
-		state.M = M4::Scale(scale) * M4::Rotate(rotAngle, rotAxis) * M4::Translate(pos);
-		state.Minv = M4::Translate(-pos) * M4::Rotate(-rotAngle, rotAxis) * M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
-		state.material = material;
-		state.texture = texture;
-		shader->Bind(state);
-		texture->Bind(shader->shaderProg);
-		//material -- ?? kell-e? ugye ez a textura es shader kozosen
-		geometry->Draw();
-	}
-	virtual void Animate(f dt) {}
-
-
-};
-
 struct Shader {
 	unsigned int shaderProg;
+	unsigned int shaderProgram;
 
 	void Create(const char * vsSrc, const char * vsAttrNames[], const char * fsSrc, const char * fsOuputName) {
 		unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
@@ -572,19 +531,19 @@ struct Shader {
 class ShadowShader : public Shader {
 	const char * vsSrc = R"(
 		uniform mat4 MVP;
-	in vec3 vtxPos;
+		in vec3 vtxPos;
 
 			void main() {
-		gl_Position = vec4(vtxPos, 1) * MVP;
-	}
+			gl_Position = vec4(vtxPos, 1) * MVP;
+		}
 	)";
 
 	const char * fsSrc = R"(
 		out vec4 fragmentColor;
 
-			void main() {
-		fragmentColor = vec4(0, 0, 0, 1);
-	}
+		void main() {
+			fragmentColor = vec4(0, 0, 0, 1);
+		}
 	)";
 
 public:
@@ -601,14 +560,53 @@ public:
 	}
 };
 
+class Object {
+	Shader * shader;
+	Material * material;
+	Texture * texture;
+	Geometry * geometry;
+	V3 scale, pos, rotAxis;
+	f rotAngle;
 
-Camera camera;
+public:
+	virtual void Draw(RenderState state) {
+		state.M = M4::Scale(scale) * M4::Rotate(rotAngle, rotAxis) * M4::Translate(pos);
+		state.Minv = M4::Translate(-pos) * M4::Rotate(-rotAngle, rotAxis) * M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+		state.material = material;
+		state.texture = texture;
+		shader->Bind(state);
+		texture->Bind(shader->shaderProg);
+		//material -- ?? kell-e? ugye ez a textura es shader kozosen
+		geometry->Draw();
+	}
+	virtual void Animate(f dt) {}
+
+
+};
+
+class Scene {
+	std::vector<Object*> objects;
+	Light light;
+	RenderState state;
+
+public:
+	void Render() {
+		state.wEye = camera.wEye;
+		state.V = camera.V();
+		state.P = camera.P();
+		state.light = light;
+		for (Object * obj : objects)
+			obj->Draw(state);
+	}
+
+	void Animate(f dt) {
+		for (Object * obj : objects) obj->Animate(dt);
+	}
+};
 
 // handle of the shader program
 unsigned int shaderProgram;
 
-
-// The virtual world: collection of two objects
 
 
 // Initialization, create an OpenGL context
