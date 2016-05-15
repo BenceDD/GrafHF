@@ -93,21 +93,21 @@ void checkLinking(unsigned int program) {
 }
 
 // vertex shader in GLSL
-const char *vertexSource = R"(
-	#version 130
- precision highp float;
-
-		uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
-
-		in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
-	in vec3 vertexColor;	 // variable input from Attrib Array selected by glBindAttribLocation
-	out vec3 color;				// output attribute
-
-		void main() {
-		color = vertexColor;														// copy color from input to output
-		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
-	}
-)";
+//const char *vertexSource = R"(
+//	#version 130
+// precision highp float;
+//
+//		uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
+//
+//		in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+//	in vec3 vertexColor;	 // variable input from Attrib Array selected by glBindAttribLocation
+//	out vec3 color;				// output attribute
+//
+//		void main() {
+//		color = vertexColor;														// copy color from input to output
+//		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
+//	}
+//)";
 
 // fragment shader in GLSL
 const char *fragmentSource = R"(
@@ -325,12 +325,6 @@ struct Geometry {
 		glBindVertexArray(vao);
 	}
 	void Draw() {
-		int samplerUnit = GL_TEXTURE0; // GL_TEXTURE1, ...
-		int location = glGetUniformLocation(shaderProg, "samplerUnit");
-		glUniform1i(location, samplerUnit);
-		glActiveTexture(samplerUnit);
-		glBindTexture(GL_TEXTURE_2D, texture.textureId);
-
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
 	}
@@ -363,9 +357,9 @@ struct ParamSurface : Geometry {
 		glEnableVertexAttribArray(0); // AttribArray 0 = POSITION
 		glEnableVertexAttribArray(1); // AttribArray 1 = NORMAL
 		glEnableVertexAttribArray(2); // AttribArray 2 = UV
-		glVertexAttribPointer(0, 3, GL_f, GL_FALSE, stride, (void *) 0);
-		glVertexAttribPointer(1, 3, GL_f, GL_FALSE, stride, (void *) sVec3);
-		glVertexAttribPointer(2, 2, GL_f, GL_FALSE, stride, (void *) (2 * sVec3));
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, stride, (void *) 0);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, stride, (void *) sVec3);
+		glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, stride, (void *) (2 * sVec3));
 	}
 
 };
@@ -431,22 +425,22 @@ public:
 	}
 };
 
-void Draw() {
-	M4 M = M4::Scale(scale) *
-		M4::Rotate(rotAng, rotAxis) *
-		M4::Translate(pos);
-	M4 Minv = M4::Translate(pos) *
-		M4::Rotate(-rotAngle, rotAxis) *
-		M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
-	M4 MVP = M * camera.V() * camera.P();
-
-	M.SetUniform(shaderProg, "M");
-	Minv.SetUniform(shaderProg, "Minv");
-	MVP.SetUniform(shaderProg, "MVP");
-
-	glBindVertexArray(vao);
-	glDrawArrays(GL_TRIANGLES, 0, nVtx);
-}
+//void Draw() {
+//	M4 M = M4::Scale(scale) *
+//		M4::Rotate(rotAng, rotAxis) *
+//		M4::Translate(pos);
+//	M4 Minv = M4::Translate(pos) *
+//		M4::Rotate(-rotAngle, rotAxis) *
+//		M4::Scale(V3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+//	M4 MVP = M * camera.V() * camera.P();
+//
+//	M.SetUniform(shaderProg, "M");
+//	Minv.SetUniform(shaderProg, "Minv");
+//	MVP.SetUniform(shaderProg, "MVP");
+//
+//	glBindVertexArray(vao);
+//	glDrawArrays(GL_TRIANGLES, 0, nVtx);
+//}
 
 struct Texture {
 	unsigned int textureId;
@@ -456,9 +450,31 @@ struct Texture {
 		int width, height;
 		f * image = LoadImage(fname, width, height); // megírni!
 		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
-			0, GL_RGB, GL_f, image); //Texture -> OpenGL
+			0, GL_RGB, GL_FLOAT, image); //Texture -> OpenGL
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
+
+	void Bind(unsigned int shaderProg) {
+		int samplerUnit = GL_TEXTURE0; // GL_TEXTURE1, ...
+		int location = glGetUniformLocation(shaderProg, "samplerUnit");
+		glUniform1i(location, samplerUnit);
+		glActiveTexture(samplerUnit);
+		glBindTexture(GL_TEXTURE_2D, textureId);
+	}
+
+	f* LoadImage(char* const fname, int const width, int const height) const {
+		f* img = new float[3 * width * height];
+
+		for (int i = 0; i < width; i++) {
+			for (int j = 0; j < height; j++) {
+				img[i * height + j] = (float)i / (float)width;
+				img[i * height + j] = (float)j / (float)height;
+				img[i * height + j] = 0.5f;
+			}
+		}
+
+		return img;
 	}
 };
 
@@ -513,6 +529,8 @@ public:
 		state.material = material;
 		state.texture = texture;
 		shader->Bind(state);
+		texture->Bind(shader->shaderProg);
+		//material -- ?? kell-e? ugye ez a textura es shader kozosen
 		geometry->Draw();
 	}
 	virtual void Animate(f dt) {}
@@ -541,7 +559,14 @@ struct Shader {
 		glLinkProgram(shaderProg);
 	}
 	virtual
-		void Bind(RenderState & state) { glUseProgram(shaderProg); }
+		void Bind(RenderState & state) { glUseProgram(shaderProg); 
+
+		M4 MVP = state.M * camera.V() * camera.P();
+
+		state.M.SetUniform(shaderProg, "M");
+		state.Minv.SetUniform(shaderProg, "Minv");
+		MVP.SetUniform(shaderProg, "MVP");
+	}
 };
 
 class ShadowShader : public Shader {
@@ -685,7 +710,7 @@ void onIdle() {
 // Idaig modosithatod...
 //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-int main(int argc, char * argv[]) {
+int main( int argc, char * argv[] ) {
 	glutInit(&argc, argv);
 #if !defined(__APPLE__)
 	glutInitContextVersion(majorVersion, minorVersion);
