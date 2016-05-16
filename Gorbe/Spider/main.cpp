@@ -62,7 +62,7 @@ void checkLinking(unsigned int program) {
 }
 
 // vertex shader in GLSL
-const char *vertexSource = R"(
+const char *vertexSource_xxx = R"(
 	#version 130
     precision highp float;
 
@@ -79,7 +79,7 @@ const char *vertexSource = R"(
 	}
 )";
 
-const char *vertexSource_xxx = R"(
+const char *vertexSource = R"(
 	uniform mat4  MVP, M, Minv; // MVP, Model, Model-inverse
 	uniform vec4  wLiPos;       // pos of light source 
 	uniform vec3  wEye;         // pos of eye
@@ -102,7 +102,7 @@ const char *vertexSource_xxx = R"(
 )";
 
 // fragment shader in GLSL
-const char *fragmentSource = R"(
+const char *fragmentSource_xxx = R"(
 	#version 130
 	precision highp float;
 
@@ -114,7 +114,7 @@ const char *fragmentSource = R"(
 	}
 )";
 
-const char *fragmentSource_xxx = R"(
+const char *fragmentSource = R"(
 	uniform vec3 kd, ks, ka;// diffuse, specular, ambient ref
 	uniform vec3 La, Le;    // ambient and point source rad
 	uniform float shine;    // shininess for specular ref
@@ -337,7 +337,6 @@ struct Geometry {
 		addUniformMatrixToShader(shaderProgram, MVPTransform, "MVP");
 
 		// ujak
-		
 		addUniformMatrixToShader(shaderProgram, M, "M");
 		addUniformMatrixToShader(shaderProgram, M, "Minv");
 		addUniformVectorToShader(shaderProgram, light.pos, "wLiPos");
@@ -347,10 +346,10 @@ struct Geometry {
 		addUniformVectorToShader(shaderProgram, vec3(1.0, 1.0, 1.0), "ks");
 		addUniformVectorToShader(shaderProgram, vec3(0.7, 0.7, 0.7), "ka");
 
-		addUniformVectorToShader(shaderProgram, vec3(100, 100, 100), "La");
-		addUniformVectorToShader(shaderProgram, vec3(100, 100, 100), "Le");
+		addUniformVectorToShader(shaderProgram, vec3(1, 1, 1), "La");
+		addUniformVectorToShader(shaderProgram, vec3(1, 1, 1), "Le");
 
-		addUniformFloatToShader(shaderProgram, 1.f, "shine");
+		addUniformFloatToShader(shaderProgram, 100.0f, "shine");
 		
 
 		glBindVertexArray(vao);
