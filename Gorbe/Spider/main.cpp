@@ -100,13 +100,13 @@ const char *vertexSource = R"(
 
 		uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
 
-		in vec2 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+		in vec3 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
 	in vec3 vertexColor;	    // variable input from Attrib Array selected by glBindAttribLocation
 	out vec3 color;				// output attribute
 
 		void main() {
 		color = vertexColor;														// copy color from input to output
-		gl_Position = vec4(vertexPosition.x, vertexPosition.y, 0, 1) * MVP; 		// transform to clipping space
+		gl_Position = vec4(vertexPosition.x, vertexPosition.y, vertexPosition.z, 1) * MVP; 		// transform to clipping space
 	}
 )";
 
@@ -170,98 +170,100 @@ struct vec4 {
 	}
 };
 
-struct V3 {
+struct vec3 {
 	f x, y, z;
 
-	V3(f x = 0, f y = 0, f z = 0) : x(x), y(y), z(z) {}
+	vec3(f x = 0, f y = 0, f z = 0) : x(x), y(y), z(z) {}
 
-	V3 operator* (const f scalar) const {
-		return V3(x * scalar, y * scalar, z * scalar);
+	vec3 operator* (const f scalar) const {
+		return vec3(x * scalar, y * scalar, z * scalar);
 	}
 
-	friend V3 operator* (const f scalar, const V3& v) {
+	friend vec3 operator* (const f scalar, const vec3& v) {
 		return v * scalar;
 	}
 
-	f operator * (const V3& rhs) const {
+	f operator * (const vec3& rhs) const {
 		return x * rhs.x + y * rhs.y + z * rhs.z;
 	}
 
-	V3 operator % (const V3& rhs) const {
-		return V3(y * rhs.z - z * rhs.y, z * rhs.x - x * rhs.z, x * rhs.y - y * rhs.x);
+	vec3 operator % (const vec3& rhs) const {
+		return vec3(y * rhs.z - z * rhs.y, z * rhs.x - x * rhs.z, x * rhs.y - y * rhs.x);
 	}
 
-	friend V3 operator+ (const V3& l, const V3& r) {
-		return V3(l.x + r.x, l.y + r.y, l.z + r.z);
+	friend vec3 operator+ (const vec3& l, const vec3& r) {
+		return vec3(l.x + r.x, l.y + r.y, l.z + r.z);
 	}
 
-	friend V3 operator- (const V3& l, const V3& r) {
-		return V3(l.x - r.x, l.y - r.y, l.z - r.z);
+	friend vec3 operator- (const vec3& l, const vec3& r) {
+		return vec3(l.x - r.x, l.y - r.y, l.z - r.z);
 	}
 
-	V3 operator- () const {
-		return V3(-x, -y, -z);
+	vec3 operator- () const {
+		return vec3(-x, -y, -z);
 	}
 
 	f Length() const {
 		return sqrtf(x * x + y * y + z * z);
 	}
 
-	V3 Normal() const {
+	vec3 Normal() const {
 		f l = Length();
-		return V3(x / l, y / l, z / l);
+		return vec3(x / l, y / l, z / l);
 	}
 };
 
-// 2D camera
-struct Camera {
-	float wCx, wCy;	// center in world coordinates
-	float wWx, wWy;	// width and height in world coordinates
+mat4 Translate(float tx, float ty, float tz) {
+	return mat4(
+		1, 0, 0, 0,
+		0, 1, 0, 0,
+		0, 0, 1, 0,
+		tx, ty, tz, 1
+		);
+}
+
+class Camera {
+	vec3 wEye, wLookat, wVup;
+	f fov, asp, fp, bp;
+
 public:
-	Camera() {
-		Animate(0);
+	Camera() : wLookat(-1, -1, -1), wEye(10, 10, 10), wVup(0, 1, 0) {
+		fov = M_PI / 4;
+		fp = 0.1;
+		bp = 100;
+		asp = 10;
 	}
 
-	mat4 V() { // view matrix: translates the center to the origin
-		return mat4(1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			-wCx, -wCy, 0, 1);
+	mat4 V() { // view matrix
+		vec3 w = (wEye - wLookat).Normal();
+		vec3 u = (wVup % w).Normal();
+		vec3 v = w % u;
+		return Translate(-wEye.x, -wEye.y, -wEye.z) * mat4(
+			u.x, v.x, w.x, 0.0f,
+			u.y, v.y, w.y, 0.0f,
+			u.z, v.z, w.z, 0.0f,
+			0.0f, 0.0f, 0.0f, 1.0f
+			);
 	}
-
-	mat4 P() { // projection matrix: scales it to be a square of edge length 2
-		return mat4(2 / wWx, 0, 0, 0,
-			0, 2 / wWy, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1);
-	}
-
-	mat4 Vinv() { // inverse view matrix
-		return mat4(1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			wCx, wCy, 0, 1);
-	}
-
-	mat4 Pinv() { // inverse projection matrix
-		return mat4(wWx / 2, 0, 0, 0,
-			0, wWy / 2, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1);
-	}
-
-	void Animate(float t) {
-		wCx = 0; // 10 * cosf(t);
-		wCy = 0;
-		wWx = 20;
-		wWy = 20;
+	mat4 P() { // projection matrix
+		f sy = 1 / tan(fov / 2);
+		return mat4(
+			sy / asp, 0.0f, 0.0f, 0.0f,
+			0.0f, sy, 0.0f, 0.0f,
+			0.0f, 0.0f, -(fp + bp) / (bp - fp), -1.0f,
+			0.0f, 0.0f, -2 * fp * bp / (bp - fp), 0.0f
+			);
 	}
 };
 
+// 3D camera
+Camera camera;
 
+// handle of the shader program
+unsigned int shaderProgram;
 
 struct VertexData {
-	V3 position, normal;
+	vec3 position, normal;
 	f u, v;
 };
 
@@ -269,7 +271,7 @@ struct Geometry {
 	unsigned int vao, nVtx;
 
 	Geometry() {
-		
+
 	}
 
 	void Create() {
@@ -278,6 +280,22 @@ struct Geometry {
 	}
 
 	void Draw() {
+		mat4 M( // model matrix
+			1, 0, 0, 0,
+			0, 1, 0, 0,
+			0, 0, 1, 0,
+			0, 0, 0, 1
+			);
+
+		mat4 MVPTransform = M * camera.V() * camera.P();
+
+		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
+		int location = glGetUniformLocation(shaderProgram, "MVP");
+		if (location >= 0)
+			glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform); // set uniform variable MVP to the MVPTransform
+		else
+			printf("uniform MVP cannot be set\n");
+
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
 	}
@@ -294,7 +312,6 @@ struct ParamSurface : Geometry {
 		glGenBuffers(1, &vbo);
 		glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-	//	VertexData * vtxData = new VertexData[nVtx], *pVtx = vtxData;
 		std::vector<VertexData> vtxData(nVtx);
 		VertexData * pVtx = &vtxData[0];
 
@@ -309,7 +326,7 @@ struct ParamSurface : Geometry {
 			}
 		}
 
-		int stride = sizeof(VertexData), sVec3 = sizeof(V3);
+		int stride = sizeof(VertexData), sVec3 = sizeof(vec3);
 		glBufferData(GL_ARRAY_BUFFER, nVtx * stride, &vtxData[0], GL_STATIC_DRAW);
 
 		glEnableVertexAttribArray(0); // AttribArray 0 = POSITION
@@ -323,10 +340,10 @@ struct ParamSurface : Geometry {
 };
 
 class Sphere : public ParamSurface {
-	V3 center;
+	vec3 center;
 	f radius;
 public:
-	Sphere(V3 c, f r) : center(c), radius(r) { }
+	Sphere(vec3 c, f r) : center(c), radius(r) {}
 
 	void Create() {
 		ParamSurface::Create(32, 16);  // tessellation level
@@ -334,7 +351,7 @@ public:
 
 	VertexData GenVertexData(f u, f v) {
 		VertexData vd;
-		vd.normal = V3(cos(u * 2 * M_PI) * sin(v * M_PI),
+		vd.normal = vec3(cos(u * 2 * M_PI) * sin(v * M_PI),
 			sin(u * 2 * M_PI) * sin(v * M_PI),
 			cos(v * M_PI));
 		vd.position = vd.normal * radius + center;
@@ -347,7 +364,7 @@ public:
 class Flag : public ParamSurface {
 	f W, H, D, K, phase;
 public:
-	Flag(f w, f h, f d, f k, f p) : W(w), H(h), D(d), K(k), phase(p) { }
+	Flag(f w, f h, f d, f k, f p) : W(w), H(h), D(d), K(k), phase(p) {}
 
 	void Create() {
 		ParamSurface::Create(60, 40); // tessellation level
@@ -356,8 +373,8 @@ public:
 	VertexData GenVertexData(f u, f v) {
 		VertexData vd;
 		f angle = u * K * M_PI + phase;
-		vd.position = V3(u * W, v * H, sin(angle) * D);
-		vd.normal = V3(-K * M_PI * cos(angle) * D, 0, W);
+		vd.position = vec3(u * W, v * H, sin(angle) * D);
+		vd.normal = vec3(-K * M_PI * cos(angle) * D, 0, W);
 		vd.u = u;
 		vd.v = v;
 		return vd;
@@ -368,21 +385,33 @@ public:
 class Torus : public ParamSurface {
 	f R, r;
 public:
-	Torus(f R, f r) : R(R), r(r) { }
+	Torus(f R, f r) : R(R), r(r) {}
 
 	void Create() {
-		ParamSurface::Create(64, 32); 
+		ParamSurface::Create(64, 32);
 	}
 
 	VertexData GenVertexData(f u, f v) {
+		f i = u * 2 * M_PI;
+		f j = v * 2 * M_PI;
 
-		/* tangent vector with respect to big circle */
-		V3 t(-sinf(v* 2* M_PI), cosf(v* 2 * M_PI), 0);
-		/* tangent vector with respect to little circle */
-		V3 s(cosf(v* 2 * M_PI) * (-sinf(u* 2 * M_PI)), sinf(v* 2 * M_PI) * (-sinf(u* 2 * M_PI)), cosf(u* 2 * M_PI));
+		vec3 t( // tangent vector with respect to big circle
+			-sinf(j),
+			cosf(j),
+			0
+			);
+		vec3 s( // tangent vector with respect to little circle
+			cosf(j) * -sinf(i),
+			sinf(j) * -sinf(i),
+			cosf(i)
+			);
 
 		VertexData vd;
-		vd.position = V3(cosf(v* 2 * M_PI) * (R + cosf(u* 2 * M_PI) * r), sinf(v* 2 * M_PI) * (R + cosf(u* 2 * M_PI) * r), sinf(u* 2 * M_PI) * r);
+		vd.position = vec3(
+			cosf(j) * (R + cosf(i) * r),
+			sinf(j) * (R + cosf(i) * r),
+			sinf(i) * r
+			);
 		vd.normal = (t % s).Normal();
 		vd.u = u;
 		vd.v = v;
@@ -390,12 +419,6 @@ public:
 	}
 };
 
-
-// 2D camera
-Camera camera;
-
-// handle of the shader program
-unsigned int shaderProgram;
 
 class Triangle {
 	unsigned int vao;	// vertex array object id
@@ -440,16 +463,16 @@ public:
 	}
 
 	void Animate(float t) {
-		sx = 1; // *sinf(t);
-		sy = 1; // *cosf(t);
-		wTx = 0; // 4 * cosf(t / 2);
-		wTy = 0; // 4 * sinf(t / 2);
+		sx = 1 * sinf(t);
+		sy = 1 * cosf(t);
+		wTx = 4 * cosf(t / 2);
+		wTy = 4 * sinf(t / 2);
 	}
 
 	void Draw() {
 		mat4 M(sx, 0, 0, 0,
 			0, sy, 0, 0,
-			0, 0, 0, 0,
+			0, 0, 1, 0,
 			wTx, wTy, 0, 1); // model matrix
 
 		mat4 MVPTransform = M * camera.V() * camera.P();
@@ -464,63 +487,10 @@ public:
 	}
 };
 
-class LineStrip {
-	GLuint vao, vbo;        // vertex array object, vertex buffer object
-	float  vertexData[100]; // interleaved data of coordinates and colors
-	int    nVertices;       // number of vertices
-public:
-	LineStrip() {
-		nVertices = 0;
-	}
-	void Create() {
-		glGenVertexArrays(1, &vao);
-		glBindVertexArray(vao);
-
-		glGenBuffers(1, &vbo); // Generate 1 vertex buffer object
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		// Enable the vertex attribute arrays
-		glEnableVertexAttribArray(0);  // attribute array 0
-		glEnableVertexAttribArray(1);  // attribute array 1
-									   // Map attribute array 0 to the vertex data of the interleaved vbo
-		glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void*>(0)); // attribute array, components/attribute, component type, normalize?, stride, offset
-																										// Map attribute array 1 to the color data of the interleaved vbo
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<void*>(2 * sizeof(float)));
-	}
-
-	void AddPoint(float cX, float cY) {
-		if (nVertices >= 20) return;
-
-		vec4 wVertex = vec4(cX, cY, 0, 1) * camera.Pinv() * camera.Vinv();
-		// fill interleaved data
-		vertexData[5 * nVertices] = wVertex.v[0];
-		vertexData[5 * nVertices + 1] = wVertex.v[1];
-		vertexData[5 * nVertices + 2] = 1; // red
-		vertexData[5 * nVertices + 3] = 1; // green
-		vertexData[5 * nVertices + 4] = 0; // blue
-		nVertices++;
-		// copy data to the GPU
-		glBindBuffer(GL_ARRAY_BUFFER, vbo);
-		glBufferData(GL_ARRAY_BUFFER, nVertices * 5 * sizeof(float), vertexData, GL_DYNAMIC_DRAW);
-	}
-
-	void Draw() {
-		if (nVertices > 0) {
-			mat4 VPTransform = camera.V() * camera.P();
-
-			int location = glGetUniformLocation(shaderProgram, "MVP");
-			if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, VPTransform);
-			else printf("uniform MVP cannot be set\n");
-
-			glBindVertexArray(vao);
-			glDrawArrays(GL_LINE_STRIP, 0, nVertices);
-		}
-	}
-};
 
 // The virtual world: collection of two objects
 Triangle triangle;
-LineStrip lineStrip;
-Sphere sphere(V3(6, 1, 1), 3);
+Sphere sphere(vec3(6, 1, 1), 3);
 Torus torus(4, 1);
 
 // Initialization, create an OpenGL context
@@ -528,8 +498,7 @@ void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Create objects by setting up their vertex data on the GPU
-	triangle.Create();
-	lineStrip.Create();
+	//	triangle.Create();
 	sphere.Create();
 	torus.Create();
 
@@ -587,8 +556,7 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	triangle.Draw();
-	lineStrip.Draw();
+														//	triangle.Draw();
 	sphere.Draw();
 	torus.Draw();
 
@@ -611,7 +579,6 @@ void onMouse(int button, int state, int pX, int pY) {
 	if (button == GLUT_LEFT_BUTTON && state == GLUT_DOWN) {  // GLUT_LEFT_BUTTON / GLUT_RIGHT_BUTTON and GLUT_DOWN / GLUT_UP
 		float cX = 2.0f * pX / windowWidth - 1;	// flip y axis
 		float cY = 1.0f - 2.0f * pY / windowHeight;
-		lineStrip.AddPoint(cX, cY);
 		glutPostRedisplay();     // redraw
 	}
 }
@@ -623,8 +590,7 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
-	camera.Animate(sec);					// animate the camera
-	triangle.Animate(sec);					// animate the triangle object
+
 	glutPostRedisplay();					// redraw the scene
 }
 
