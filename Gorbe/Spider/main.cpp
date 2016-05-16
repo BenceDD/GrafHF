@@ -62,24 +62,10 @@ void checkLinking(unsigned int program) {
 }
 
 // vertex shader in GLSL
-const char *vertexSource_xxx = R"(
-	#version 130
-    precision highp float;
-
-	uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
-
-	in vec3 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
-	in vec3 vertexNormal;	    // variable input from Attrib Array selected by glBindAttribLocation
-
-	out vec3 color;				// output attribute
-
-	void main() {
-		color = vertexNormal;											// copy color from input to output
-		gl_Position = vec4(vertexPosition.x, vertexPosition.y, vertexPosition.z, 1) * MVP; 		// transform to clipping space
-	}
-)";
-
 const char *vertexSource = R"(
+	#version 130
+	precision highp float;
+
 	uniform mat4  MVP, M, Minv; // MVP, Model, Model-inverse
 	uniform vec4  wLiPos;       // pos of light source 
 	uniform vec3  wEye;         // pos of eye
@@ -102,19 +88,10 @@ const char *vertexSource = R"(
 )";
 
 // fragment shader in GLSL
-const char *fragmentSource_xxx = R"(
-	#version 130
-	precision highp float;
-
-	in vec3 color;				// variable input: interpolated color of vertex shader
-	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
-
-	void main() {
-		fragmentColor = vec4(color, 1); // extend RGB to RGBA
-	}
-)";
-
 const char *fragmentSource = R"(
+	#version 130
+    precision highp float;
+
 	uniform vec3 kd, ks, ka;// diffuse, specular, ambient ref
 	uniform vec3 La, Le;    // ambient and point source rad
 	uniform float shine;    // shininess for specular ref
@@ -292,7 +269,7 @@ void addUniformMatrixToShader(const int& shader, mat4& m, const char* name) {
 		printf("uniform matrix cannot be set\n");
 }
 
-void addUniformVectorToShader(const int& shader, vec3& v, const char* name) {
+void addUniformVectorToShader(const int& shader, const vec3& v, const char* name) {
 	int location = glGetUniformLocation(shader, name);
 	if (location >= 0)
 		glUniform3f(location, v.x, v.y, v.z);
@@ -300,7 +277,7 @@ void addUniformVectorToShader(const int& shader, vec3& v, const char* name) {
 		printf("uniform vector cannot be set\n");
 }
 
-void addUniformVectorToShader(const int& shader, vec4& v, const char* name) {
+void addUniformVectorToShader(const int& shader, const vec4& v, const char* name) {
 	int location = glGetUniformLocation(shader, name);
 	if (location >= 0)
 		glUniform4f(location, v.v[0], v.v[1], v.v[2], v.v[3]);
@@ -354,7 +331,7 @@ struct Geometry {
 		addUniformVectorToShader(shaderProgram, vec3(1.0, 1.0, 1.0), "ks");
 		addUniformVectorToShader(shaderProgram, vec3(0.7, 0.7, 0.7), "ka");
 
-		addUniformVectorToShader(shaderProgram, vec3(1, 1, 1), "La");
+		addUniformVectorToShader(shaderProgram, vec3(0.5, 0.5, 0.5), "La");
 		addUniformVectorToShader(shaderProgram, vec3(1, 1, 1), "Le");
 
 		addUniformFloatToShader(shaderProgram, 100.0f, "shine");
@@ -463,77 +440,7 @@ public:
 	}
 };
 
-
-class Triangle {
-	unsigned int vao;	// vertex array object id
-	float sx, sy;		// scaling
-	float wTx, wTy;		// translation
-public:
-	Triangle() {
-		Animate(0);
-	}
-
-	void Create() {
-		glGenVertexArrays(1, &vao);	// create 1 vertex array object
-		glBindVertexArray(vao);		// make it active
-
-		unsigned int vbo[2];		// vertex buffer objects
-		glGenBuffers(2, &vbo[0]);	// Generate 2 vertex buffer objects
-
-									// vertex coordinates: vbo[0] -> Attrib Array 0 -> vertexPosition of the vertex shader
-		glBindBuffer(GL_ARRAY_BUFFER, vbo[0]); // make it active, it is an array
-		static float vertexCoords[] = { -8, -8, -6, 10, 8, -2 };	// vertex data on the CPU
-		glBufferData(GL_ARRAY_BUFFER,      // copy to the GPU
-			sizeof(vertexCoords),  // number of the vbo in bytes
-			vertexCoords,		   // address of the data array on the CPU
-			GL_STATIC_DRAW);	   // copy to that part of the memory which is not modified 
-								   // Map Attribute Array 0 to the current bound vertex buffer (vbo[0])
-		glEnableVertexAttribArray(0);
-		// Data organization of Attribute Array 0 
-		glVertexAttribPointer(0,			// Attribute Array 0
-			2, GL_FLOAT,  // components/attribute, component type
-			GL_FALSE,		// not in fixed point format, do not normalized
-			0, NULL);     // stride and offset: it is tightly packed
-
-						  // vertex colors: vbo[1] -> Attrib Array 1 -> vertexColor of the vertex shader
-		glBindBuffer(GL_ARRAY_BUFFER, vbo[1]); // make it active, it is an array
-		static float vertexColors[] = { 1, 0, 0, 0, 1, 0, 0, 0, 1 };	// vertex data on the CPU
-		glBufferData(GL_ARRAY_BUFFER, sizeof(vertexColors), vertexColors, GL_STATIC_DRAW);	// copy to the GPU
-
-																							// Map Attribute Array 1 to the current bound vertex buffer (vbo[1])
-		glEnableVertexAttribArray(1);  // Vertex position
-									   // Data organization of Attribute Array 1
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 0, NULL); // Attribute Array 1, components/attribute, component type, normalize?, tightly packed
-	}
-
-	void Animate(float t) {
-		sx = 1 * sinf(t);
-		sy = 1 * cosf(t);
-		wTx = 4 * cosf(t / 2);
-		wTy = 4 * sinf(t / 2);
-	}
-
-	void Draw() {
-		mat4 M(sx, 0, 0, 0,
-			0, sy, 0, 0,
-			0, 0, 1, 0,
-			wTx, wTy, 0, 1); // model matrix
-
-		mat4 MVPTransform = M * camera.V() * camera.P();
-
-		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
-		int location = glGetUniformLocation(shaderProgram, "MVP");
-		if (location >= 0) glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform); // set uniform variable MVP to the MVPTransform
-		else printf("uniform MVP cannot be set\n");
-
-		glBindVertexArray(vao);	// make the vao and its vbos active playing the role of the data source
-		glDrawArrays(GL_TRIANGLES, 0, 3);	// draw a single triangle with vertices defined in vao
-	}
-};
-
-
 // The virtual world: collection of two objects
-Triangle triangle;
 Sphere sphere(vec3(-2, 2, 1), 1);
 Torus torus(5, 4);
 
