@@ -271,12 +271,12 @@ public:
 };
 
 struct Light {
-	vec3 pos;
+	vec4 pos;
 
-	Light(const vec3& pos) : pos(pos) {}
+	Light(const vec4& pos) : pos(pos) {}
 };
 
-Light light(vec3(-1, -100, 0));
+Light light(vec4(-1, -100, 0, 1));
 
 // 3D camera
 Camera camera;
@@ -296,6 +296,14 @@ void addUniformVectorToShader(const int& shader, vec3& v, const char* name) {
 	int location = glGetUniformLocation(shader, name);
 	if (location >= 0)
 		glUniform3f(location, v.x, v.y, v.z);
+	else
+		printf("uniform vector cannot be set\n");
+}
+
+void addUniformVectorToShader(const int& shader, vec4& v, const char* name) {
+	int location = glGetUniformLocation(shader, name);
+	if (location >= 0)
+		glUniform4f(location, v.v[0], v.v[1], v.v[2], v.v[3]);
 	else
 		printf("uniform vector cannot be set\n");
 }
