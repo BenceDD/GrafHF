@@ -1,36 +1,4 @@
-//=============================================================================================
-// Szamitogepes grafika hazi feladat keret. Ervenyes 2016-tol.
-// A //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-// sorokon beluli reszben celszeru garazdalkodni, mert a tobbit ugyis toroljuk.
-// A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat.
-// Tilos:
-// - mast "beincludolni", illetve mas konyvtarat hasznalni
-// - faljmuveleteket vegezni a printf-et kivéve
-// - new operatort hivni a lefoglalt adat korrekt felszabaditasa nelkul
-// - felesleges programsorokat a beadott programban hagyni
-// - felesleges kommenteket a beadott programba irni a forrasmegjelolest kommentjeit kiveve
-// ---------------------------------------------------------------------------------------------
-// A feladatot ANSI C++ nyelvu forditoprogrammal ellenorizzuk, a Visual Studio-hoz kepesti elteresekrol
-// es a leggyakoribb hibakrol (pl. ideiglenes objektumot nem lehet referencia tipusnak ertekul adni)
-// a hazibeado portal ad egy osszefoglalot.
-// ---------------------------------------------------------------------------------------------
-// A feladatmegoldasokban csak olyan OpenGL fuggvenyek hasznalhatok, amelyek az oran a feladatkiadasig elhangzottak 
-//
-// NYILATKOZAT
-// ---------------------------------------------------------------------------------------------
-// Nev    : 
-// Neptun : 
-// ---------------------------------------------------------------------------------------------
-// ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
-// mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
-// A forrasmegjeloles kotelme vonatkozik az eloadas foliakat es a targy oktatoi, illetve a
-// grafhazi doktor tanacsait kiveve barmilyen csatornan (szoban, irasban, Interneten, stb.) erkezo minden egyeb
-// informaciora (keplet, program, algoritmus, stb.). Kijelentem, hogy a forrasmegjelolessel atvett reszeket is ertem,
-// azok helyessegere matematikai bizonyitast tudok adni. Tisztaban vagyok azzal, hogy az atvett reszek nem szamitanak
-// a sajat kontribucioba, igy a feladat elfogadasarol a tobbi resz mennyisege es minosege alapjan szuletik dontes.
-// Tudomasul veszem, hogy a forrasmegjeloles kotelmenek megsertese eseten a hazifeladatra adhato pontokat
-// negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
-//=============================================================================================
+// HEAD ++
 
 #define _USE_MATH_DEFINES
 #include <stdio.h>
@@ -98,28 +66,72 @@ const char *vertexSource = R"(
 	#version 130
     precision highp float;
 
-		uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
+	uniform mat4 MVP;			// Model-View-Projection matrix in row-major format
 
-		in vec3 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
-	in vec3 vertexColor;	    // variable input from Attrib Array selected by glBindAttribLocation
+	in vec3 vertexPosition;		// variable input from Attrib Array selected by glBindAttribLocation
+	in vec3 vertexNormal;	    // variable input from Attrib Array selected by glBindAttribLocation
+
 	out vec3 color;				// output attribute
 
-		void main() {
-		color = vertexColor;														// copy color from input to output
+	void main() {
+		color = vertexNormal;											// copy color from input to output
 		gl_Position = vec4(vertexPosition.x, vertexPosition.y, vertexPosition.z, 1) * MVP; 		// transform to clipping space
+	}
+)";
+
+const char *vertexSource_xxx = R"(
+	uniform mat4  MVP, M, Minv; // MVP, Model, Model-inverse
+	uniform vec4  wLiPos;       // pos of light source 
+	uniform vec3  wEye;         // pos of eye
+
+	in  vec3 vertexPosition;            // pos in modeling space
+	in  vec3 vtxNorm;           // normal in modeling space
+
+	out vec3 wNormal;           // normal in world space
+	out vec3 wView;             // view in world space
+	out vec3 wLight;            // light dir in world space
+
+	void main() {
+		gl_Position = vec4(vertexPosition, 1) * MVP; // to NDC
+
+		vec4 wPos = vec4(vertexPosition, 1) * M;
+		wLight  = wLiPos.xyz * wPos.w - wPos.xyz * wLiPos.w;
+		wView   = wEye * wPos.w - wPos.xyz;
+		wNormal = (Minv * vec4(vtxNorm, 0)).xyz;
 	}
 )";
 
 // fragment shader in GLSL
 const char *fragmentSource = R"(
 	#version 130
-    precision highp float;
+	precision highp float;
 
-		in vec3 color;				// variable input: interpolated color of vertex shader
+	in vec3 color;				// variable input: interpolated color of vertex shader
 	out vec4 fragmentColor;		// output that goes to the raster memory as told by glBindFragDataLocation
 
-		void main() {
+	void main() {
 		fragmentColor = vec4(color, 1); // extend RGB to RGBA
+	}
+)";
+
+const char *fragmentSource_xxx = R"(
+	uniform vec3 kd, ks, ka;// diffuse, specular, ambient ref
+	uniform vec3 La, Le;    // ambient and point source rad
+	uniform float shine;    // shininess for specular ref
+
+	in  vec3 wNormal;       // interpolated world sp normal
+	in  vec3 wView;         // interpolated world sp view
+	in  vec3 wLight;        // interpolated world sp illum dir
+	out vec4 fragmentColor; // output goes to frame buffer
+
+	void main() {
+	   vec3 N = normalize(wNormal);
+	   vec3 V = normalize(wView);  
+	   vec3 L = normalize(wLight);
+	   vec3 H = normalize(L + V);
+	   float cost = max(dot(N,L), 0), cosd = max(dot(N,H), 0);
+	   vec3 color = ka * La + (kd * cost + ks * pow(cosd,shine)) * Le;
+	   fragmentColor = vec4(color, 1);
 	}
 )";
 
@@ -227,11 +239,11 @@ class Camera {
 	f fov, asp, fp, bp;
 
 public:
-	Camera() : wLookat(-1, -1, -1), wEye(10, 10, 10), wVup(0, 1, 0) {
-		fov = M_PI / 4;
-		fp = 0.1;
+	Camera() : wLookat(-1, 0, 0), wEye(0, -10, 0), wVup(0, 0, 1) {
+		fov = M_PI / 3;
+		fp = 2;
 		bp = 100;
-		asp = 10;
+		asp = 1;
 	}
 
 	mat4 V() { // view matrix
@@ -254,13 +266,49 @@ public:
 			0.0f, 0.0f, -2 * fp * bp / (bp - fp), 0.0f
 			);
 	}
+
+	vec3 getEye() { return wEye; }
 };
+
+struct Light {
+	vec3 pos;
+
+	Light(const vec3& pos) : pos(pos) {}
+};
+
+Light light(vec3(-1, -100, 0));
 
 // 3D camera
 Camera camera;
 
 // handle of the shader program
 unsigned int shaderProgram;
+
+void addUniformMatrixToShader(const int& shader, mat4& m, const char* name) {
+	int location = glGetUniformLocation(shader, name);
+	if (location >= 0)
+		glUniformMatrix4fv(location, 1, GL_TRUE, m); // set uniform variable MVP to the MVPTransform
+	else
+		printf("uniform matrix cannot be set\n");
+}
+
+void addUniformVectorToShader(const int& shader, vec3& v, const char* name) {
+	int location = glGetUniformLocation(shader, name);
+	if (location >= 0)
+		glUniform3f(location, v.x, v.y, v.z);
+	else
+		printf("uniform vector cannot be set\n");
+}
+
+void addUniformFloatToShader(const int& shader, float a, const char* name) {
+	int location = glGetUniformLocation(shader, name);
+	if (location >= 0)
+		glUniform1f(location, a);
+	else
+		printf("uniform float cannot be set\n");
+}
+
+
 
 struct VertexData {
 	vec3 position, normal;
@@ -269,10 +317,6 @@ struct VertexData {
 
 struct Geometry {
 	unsigned int vao, nVtx;
-
-	Geometry() {
-
-	}
 
 	void Create() {
 		glGenVertexArrays(1, &vao);
@@ -290,11 +334,24 @@ struct Geometry {
 		mat4 MVPTransform = M * camera.V() * camera.P();
 
 		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
-		int location = glGetUniformLocation(shaderProgram, "MVP");
-		if (location >= 0)
-			glUniformMatrix4fv(location, 1, GL_TRUE, MVPTransform); // set uniform variable MVP to the MVPTransform
-		else
-			printf("uniform MVP cannot be set\n");
+		addUniformMatrixToShader(shaderProgram, MVPTransform, "MVP");
+
+		// ujak
+		
+		addUniformMatrixToShader(shaderProgram, M, "M");
+		addUniformMatrixToShader(shaderProgram, M, "Minv");
+		addUniformVectorToShader(shaderProgram, light.pos, "wLiPos");
+		addUniformVectorToShader(shaderProgram, camera.getEye(), "wEye");
+
+		addUniformVectorToShader(shaderProgram, vec3(0.1, 0.5, 0.8), "kd");
+		addUniformVectorToShader(shaderProgram, vec3(1.0, 1.0, 1.0), "ks");
+		addUniformVectorToShader(shaderProgram, vec3(0.7, 0.7, 0.7), "ka");
+
+		addUniformVectorToShader(shaderProgram, vec3(100, 100, 100), "La");
+		addUniformVectorToShader(shaderProgram, vec3(100, 100, 100), "Le");
+
+		addUniformFloatToShader(shaderProgram, 1.f, "shine");
+		
 
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
@@ -346,7 +403,7 @@ public:
 	Sphere(vec3 c, f r) : center(c), radius(r) {}
 
 	void Create() {
-		ParamSurface::Create(32, 16);  // tessellation level
+		ParamSurface::Create(16, 8);  // tessellation level
 	}
 
 	VertexData GenVertexData(f u, f v) {
@@ -361,44 +418,23 @@ public:
 	}
 };
 
-class Flag : public ParamSurface {
-	f W, H, D, K, phase;
-public:
-	Flag(f w, f h, f d, f k, f p) : W(w), H(h), D(d), K(k), phase(p) {}
-
-	void Create() {
-		ParamSurface::Create(60, 40); // tessellation level
-	}
-
-	VertexData GenVertexData(f u, f v) {
-		VertexData vd;
-		f angle = u * K * M_PI + phase;
-		vd.position = vec3(u * W, v * H, sin(angle) * D);
-		vd.normal = vec3(-K * M_PI * cos(angle) * D, 0, W);
-		vd.u = u;
-		vd.v = v;
-		return vd;
-	}
-};
-
-
 class Torus : public ParamSurface {
 	f R, r;
 public:
 	Torus(f R, f r) : R(R), r(r) {}
 
 	void Create() {
-		ParamSurface::Create(64, 32);
+		ParamSurface::Create(16, 8);
 	}
 
 	VertexData GenVertexData(f u, f v) {
-		f i = u * 2 * M_PI;
-		f j = v * 2 * M_PI;
+		f i = u * 2.0f * M_PI;
+		f j = v * 2.0f * M_PI;
 
 		vec3 t( // tangent vector with respect to big circle
 			-sinf(j),
 			cosf(j),
-			0
+			0.0f
 			);
 		vec3 s( // tangent vector with respect to little circle
 			cosf(j) * -sinf(i),
@@ -412,9 +448,10 @@ public:
 			sinf(j) * (R + cosf(i) * r),
 			sinf(i) * r
 			);
-		vd.normal = (t % s).Normal();
+		vd.normal = -(t % s).Normal();
 		vd.u = u;
 		vd.v = v;
+
 		return vd;
 	}
 };
@@ -490,11 +527,15 @@ public:
 
 // The virtual world: collection of two objects
 Triangle triangle;
-Sphere sphere(vec3(6, 1, 1), 3);
-Torus torus(4, 1);
+Sphere sphere(vec3(-2, 2, 1), 1);
+Torus torus(5, 4);
 
 // Initialization, create an OpenGL context
 void onInitialization() {
+
+	glEnable(GL_DEPTH_TEST); // z-buffer is on
+	glDisable(GL_CULL_FACE); // backface culling is off ?????
+
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Create objects by setting up their vertex data on the GPU
@@ -534,11 +575,10 @@ void onInitialization() {
 
 	// Connect Attrib Arrays to input variables of the vertex shader
 	glBindAttribLocation(shaderProgram, 0, "vertexPosition"); // vertexPosition gets values from Attrib Array 0
-	glBindAttribLocation(shaderProgram, 1, "vertexColor");    // vertexColor gets values from Attrib Array 1
+	glBindAttribLocation(shaderProgram, 1, "vertexNormal");    // vertexColor gets values from Attrib Array 1
 
-															  // Connect the fragmentColor to the frame buffer memory
+															   // Connect the fragmentColor to the frame buffer memory
 	glBindFragDataLocation(shaderProgram, 0, "fragmentColor");	// fragmentColor goes to the frame buffer memory
-
 																// program packaging
 	glLinkProgram(shaderProgram);
 	checkLinking(shaderProgram);
@@ -555,11 +595,9 @@ void onExit() {
 void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
-
-														//	triangle.Draw();
+													
 	sphere.Draw();
 	torus.Draw();
-
 
 	glutSwapBuffers();									// exchange the two buffers
 }
@@ -608,8 +646,7 @@ int main(int argc, char * argv[]) {
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH | GLUT_3_2_CORE_PROFILE); // 8 bit R,G,B,A + double buffer + depth buffer
 #else
 	glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH);
-	glEnable(GL_DEPTH_TEST); // z-buffer is on
-	glDisable(GL_CULL_FACE); // backface culling is off ?????
+
 
 #endif
 	glutCreateWindow(argv[0]);
