@@ -66,21 +66,21 @@ const char *vertexSource = R"(
 	#version 130
 	precision highp float;
 
-	uniform mat4  MVP, M, Minv; // MVP, Model, Model-inverse
+			uniform mat4  MVP, M, Minv; // MVP, Model, Model-inverse
 	uniform vec4  wLiPos;       // pos of light source 
 	uniform vec3  wEye;         // pos of eye
 
-	in  vec3 vertexPosition;            // pos in modeling space
+			in  vec3 vertexPosition;            // pos in modeling space
 	in  vec3 vtxNorm;           // normal in modeling space
 
-	out vec3 wNormal;           // normal in world space
+			out vec3 wNormal;           // normal in world space
 	out vec3 wView;             // view in world space
 	out vec3 wLight;            // light dir in world space
 
-	void main() {
+			void main() {
 		gl_Position = vec4(vertexPosition, 1) * MVP; // to NDC
 
-		vec4 wPos = vec4(vertexPosition, 1) * M;
+				vec4 wPos = vec4(vertexPosition, 1) * M;
 		wLight  = wLiPos.xyz * wPos.w - wPos.xyz * wLiPos.w;
 		wView   = wEye * wPos.w - wPos.xyz;
 		wNormal = (Minv * vec4(vtxNorm, 0)).xyz;
@@ -92,16 +92,16 @@ const char *fragmentSource = R"(
 	#version 130
     precision highp float;
 
-	uniform vec3 kd, ks, ka;// diffuse, specular, ambient ref
+			uniform vec3 kd, ks, ka;// diffuse, specular, ambient ref
 	uniform vec3 La, Le;    // ambient and point source rad
 	uniform float shine;    // shininess for specular ref
 
-	in  vec3 wNormal;       // interpolated world sp normal
+			in  vec3 wNormal;       // interpolated world sp normal
 	in  vec3 wView;         // interpolated world sp view
 	in  vec3 wLight;        // interpolated world sp illum dir
 	out vec4 fragmentColor; // output goes to frame buffer
 
-	void main() {
+			void main() {
 	   vec3 N = normalize(wNormal);
 	   vec3 V = normalize(wView);  
 	   vec3 L = normalize(wLight);
@@ -111,53 +111,6 @@ const char *fragmentSource = R"(
 	   fragmentColor = vec4(color, 1);
 	}
 )";
-
-// row-major matrix 4x4
-struct mat4 {
-	float m[4][4];
-public:
-	mat4() {}
-	mat4(float m00, float m01, float m02, float m03,
-		float m10, float m11, float m12, float m13,
-		float m20, float m21, float m22, float m23,
-		float m30, float m31, float m32, float m33) {
-		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
-		m[1][0] = m10; m[1][1] = m11; m[1][2] = m12; m[1][3] = m13;
-		m[2][0] = m20; m[2][1] = m21; m[2][2] = m22; m[2][3] = m23;
-		m[3][0] = m30; m[3][1] = m31; m[3][2] = m32; m[3][3] = m33;
-	}
-
-	mat4 operator*(const mat4& right) {
-		mat4 result;
-		for (int i = 0; i < 4; i++) {
-			for (int j = 0; j < 4; j++) {
-				result.m[i][j] = 0;
-				for (int k = 0; k < 4; k++) result.m[i][j] += m[i][k] * right.m[k][j];
-			}
-		}
-		return result;
-	}
-	operator float*() { return &m[0][0]; }
-};
-
-
-// 3D point in homogeneous coordinates
-struct vec4 {
-	float v[4];
-
-	vec4(float x = 0, float y = 0, float z = 0, float w = 1) {
-		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
-	}
-
-	vec4 operator*(const mat4& mat) {
-		vec4 result;
-		for (int j = 0; j < 4; j++) {
-			result.v[j] = 0;
-			for (int i = 0; i < 4; i++) result.v[j] += v[i] * mat.m[i][j];
-		}
-		return result;
-	}
-};
 
 struct vec3 {
 	f x, y, z;
@@ -200,16 +153,82 @@ struct vec3 {
 		f l = Length();
 		return vec3(x / l, y / l, z / l);
 	}
+
+	void SetUniform(unsigned shaderProg, char* name) const {
+		int location = glGetUniformLocation(shaderProg, name);
+		glUniform3f(location, x, y, z);
+	}
 };
 
-mat4 Translate(float tx, float ty, float tz) {
-	return mat4(
-		1, 0, 0, 0,
-		0, 1, 0, 0,
-		0, 0, 1, 0,
-		tx, ty, tz, 1
-		);
-}
+// row-major matrix 4x4
+struct mat4 {
+	float m[4][4];
+public:
+	mat4() {}
+	mat4(float m00, float m01, float m02, float m03,
+		float m10, float m11, float m12, float m13,
+		float m20, float m21, float m22, float m23,
+		float m30, float m31, float m32, float m33) {
+		m[0][0] = m00; m[0][1] = m01; m[0][2] = m02; m[0][3] = m03;
+		m[1][0] = m10; m[1][1] = m11; m[1][2] = m12; m[1][3] = m13;
+		m[2][0] = m20; m[2][1] = m21; m[2][2] = m22; m[2][3] = m23;
+		m[3][0] = m30; m[3][1] = m31; m[3][2] = m32; m[3][3] = m33;
+	}
+
+	mat4 operator*(const mat4& right) {
+		mat4 result;
+		for (int i = 0; i < 4; i++) {
+			for (int j = 0; j < 4; j++) {
+				result.m[i][j] = 0;
+				for (int k = 0; k < 4; k++) result.m[i][j] += m[i][k] * right.m[k][j];
+			}
+		}
+		return result;
+	}
+
+	operator float*() { return &m[0][0]; }
+
+	void SetUniform(unsigned shaderProg, char* name) const {
+		int location = glGetUniformLocation(shaderProg, name);
+		glUniformMatrix4fv(location, 1, GL_TRUE, &m[0][0]);
+	}
+
+	static mat4 I() { return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1); }
+	static mat4 Scale(const vec3& vec) { return mat4(vec.x, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, vec.y, 0, 0, 0, 0, 1); }
+	static mat4 Translate(const vec3& vec) { return mat4(1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, vec.x, vec.y, vec.z, 1); }
+	static mat4 Rotate(const f angle, const vec3& axis) {
+		return mat4( // Rodrigues matrix
+			1 - (axis.x * axis.x - 1) * (cosf(angle) - 1), -axis.z * sinf(angle) - axis.x * axis.y * (cosf(angle) - 1), axis.y * sinf(angle) - axis.x * axis.z * (cosf(angle) - 1), 0,
+			axis.z * sinf(angle) - axis.x * axis.y * (cosf(angle) - 1), 1 - (axis.y * axis.y - 1) * (cosf(angle) - 1), -axis.x * sinf(angle) - axis.y * axis.z * (cosf(angle) - 1), 0,
+			-axis.y * sinf(angle) - axis.x * axis.z * (cosf(angle) - 1), axis.x * sinf(angle) - axis.y * axis.z * (cosf(angle) - 1), 1 - (axis.z * axis.z - 1) * (cosf(angle) - 1), 0,
+			0, 0, 0, 1
+			);
+	}
+};
+
+// 3D point in homogeneous coordinates
+struct vec4 {
+	float v[4];
+
+	vec4(float x = 0, float y = 0, float z = 0, float w = 1) {
+		v[0] = x; v[1] = y; v[2] = z; v[3] = w;
+	}
+
+	vec4 operator*(const mat4& mat) {
+		vec4 result;
+		for (int j = 0; j < 4; j++) {
+			result.v[j] = 0;
+			for (int i = 0; i < 4; i++) result.v[j] += v[i] * mat.m[i][j];
+		}
+		return result;
+	}
+
+	void SetUniform(unsigned shaderProg, char* name) const {
+		int location = glGetUniformLocation(shaderProg, name);
+		glUniform4f(location, v[0], v[1], v[2], v[3]);
+	}
+};
+
 
 class Camera {
 	vec3 wEye, wLookat, wVup;
@@ -227,7 +246,7 @@ public:
 		vec3 w = (wEye - wLookat).Normal();
 		vec3 u = (wVup % w).Normal();
 		vec3 v = w % u;
-		return Translate(-wEye.x, -wEye.y, -wEye.z) * mat4(
+		return mat4::Translate(-wEye) * mat4(
 			u.x, v.x, w.x, 0.0f,
 			u.y, v.y, w.y, 0.0f,
 			u.z, v.z, w.z, 0.0f,
@@ -245,45 +264,33 @@ public:
 	}
 
 	vec3 getEye() { return wEye; }
+
+	void Animate(float t) {
+		static vec4 org = vec4(wEye.x, wEye.y, wEye.z, 1);
+		vec4 new_pos = org * mat4::Rotate(t / 10, vec3(0, 0, 1));
+		wEye = vec3(new_pos.v[0], new_pos.v[1], new_pos.v[2]);
+	}
 };
 
 struct Light {
 	vec4 pos;
 
+	void Animate(float t) {
+		static vec4 org = pos;
+		pos = org * mat4::Rotate(-t, vec3(0, 0, 1));
+	}
+
 	Light(const vec4& pos) : pos(pos) {}
+	Light() {}
 };
 
-Light light(vec4(-1, -100, 0, 1));
+Light light(vec4(-1, -3, 0, 1));
 
 // 3D camera
 Camera camera;
 
 // handle of the shader program
 unsigned int shaderProgram;
-
-void addUniformMatrixToShader(const int& shader, mat4& m, const char* name) {
-	int location = glGetUniformLocation(shader, name);
-	if (location >= 0)
-		glUniformMatrix4fv(location, 1, GL_TRUE, m); // set uniform variable MVP to the MVPTransform
-	else
-		printf("uniform matrix cannot be set\n");
-}
-
-void addUniformVectorToShader(const int& shader, const vec3& v, const char* name) {
-	int location = glGetUniformLocation(shader, name);
-	if (location >= 0)
-		glUniform3f(location, v.x, v.y, v.z);
-	else
-		printf("uniform vector cannot be set\n");
-}
-
-void addUniformVectorToShader(const int& shader, const vec4& v, const char* name) {
-	int location = glGetUniformLocation(shader, name);
-	if (location >= 0)
-		glUniform4f(location, v.v[0], v.v[1], v.v[2], v.v[3]);
-	else
-		printf("uniform vector cannot be set\n");
-}
 
 void addUniformFloatToShader(const int& shader, float a, const char* name) {
 	int location = glGetUniformLocation(shader, name);
@@ -293,15 +300,68 @@ void addUniformFloatToShader(const int& shader, float a, const char* name) {
 		printf("uniform float cannot be set\n");
 }
 
+struct Texture {
+	unsigned int textureId;
+	Texture(char* fname) {
+		glGenTextures(1, &textureId);
+		glBindTexture(GL_TEXTURE_2D, textureId); // binding
+		int width, height;
+		std::vector<f> image = LoadTextureImage(fname, width, height); // megírni!
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
+			0, GL_RGB, GL_FLOAT, &image[0]); //Texture -> OpenGL
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	}
 
+	void Bind(unsigned int shaderProg) {
+		int samplerUnit = GL_TEXTURE0; // GL_TEXTURE1, ...
+		int location = glGetUniformLocation(shaderProg, "samplerUnit");
+		glUniform1i(location, samplerUnit);
+		glActiveTexture(samplerUnit);
+		glBindTexture(GL_TEXTURE_2D, textureId);
+	}
+
+	std::vector<f> LoadTextureImage(char* const fname, int const width, int const height) const {
+		std::vector<f> img(3 * width * height);
+
+		for (int i = 0; i < width; i++) {
+			for (int j = 0; j < height; j++) {
+				img[(i * height + j) * 3] = (float) i / (float) width;
+				img[(i * height + j) * 3 + 1] = (float) j / (float) height;
+				img[(i * height + j) * 3 + 2] = 0.5f;
+			}
+		}
+
+		return img;
+	}
+};
 
 struct VertexData {
 	vec3 position, normal;
 	f u, v;
 };
 
+
+struct Material {
+
+};
+
+struct RenderState {
+	vec3 wEye;
+	mat4 M, V, P, Minv;
+	Light light;
+	Texture* texture;
+	Material* material;
+};
+
+
+
 struct Geometry {
 	unsigned int vao, nVtx;
+	vec3 scale, rotAxis, pos;
+	float rotAngle;
+
+	Geometry() : scale(vec3(1, 1, 1)), rotAxis(0, 0, 0), pos(0, 0, 0), rotAngle(0) {}
 
 	void Create() {
 		glGenVertexArrays(1, &vao);
@@ -309,40 +369,37 @@ struct Geometry {
 	}
 
 	void Draw() {
-		mat4 M( // model matrix
-			1, 0, 0, 0,
-			0, 1, 0, 0,
-			0, 0, 1, 0,
-			0, 0, 0, 1
-			);
 
-		mat4 MVPTransform = M * camera.V() * camera.P();
+		mat4 M = mat4::Scale(scale) *
+			mat4::Rotate(rotAngle, rotAxis) *
+			mat4::Translate(pos.x);
+		mat4 Minv = mat4::Translate(-pos) *
+			mat4::Rotate(-rotAngle, rotAxis) *
+			mat4::Scale(vec3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+		mat4 MVP = M * camera.V() * camera.P();
 
 		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
-		addUniformMatrixToShader(shaderProgram, MVPTransform, "MVP");
+		MVP.SetUniform(shaderProgram, "MVP");
+		M.SetUniform(shaderProgram, "M");
+		Minv.SetUniform(shaderProgram, "Minv");
+		light.pos.SetUniform(shaderProgram, "wLiPos");
+		camera.getEye().SetUniform(shaderProgram, "wLiPos");
 
-		// ujak
-		addUniformMatrixToShader(shaderProgram, M, "M");
-		addUniformMatrixToShader(shaderProgram, M, "Minv");
-		addUniformVectorToShader(shaderProgram, light.pos, "wLiPos");
-		addUniformVectorToShader(shaderProgram, camera.getEye(), "wEye");
+		vec3(0.75164, 0.60648, 0.22648).SetUniform(shaderProgram, "kd");
+		vec3(0.628281, 0.555802, 0.366065).SetUniform(shaderProgram, "ks");
+		vec3(0.24725, 0.1995, 0.0745).SetUniform(shaderProgram, "ka");
+		vec3(0.01, 0.01, 0.01).SetUniform(shaderProgram, "La");
+		vec3(1, 1, 1).SetUniform(shaderProgram, "Le");
 
-		addUniformVectorToShader(shaderProgram, vec3(0.1, 0.5, 0.8), "kd");
-		addUniformVectorToShader(shaderProgram, vec3(1.0, 1.0, 1.0), "ks");
-		addUniformVectorToShader(shaderProgram, vec3(0.7, 0.7, 0.7), "ka");
+		addUniformFloatToShader(shaderProgram, 51.2f, "shine");
 
-		addUniformVectorToShader(shaderProgram, vec3(0.5, 0.5, 0.5), "La");
-		addUniformVectorToShader(shaderProgram, vec3(1, 1, 1), "Le");
-
-		addUniformFloatToShader(shaderProgram, 100.0f, "shine");
-		
 
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
 	}
 };
 
-struct ParamSurface : Geometry {
+struct ParamSurface : public Geometry {
 	virtual VertexData GenVertexData(f u, f v) = 0;
 
 	void Create(int N, int M) {
@@ -381,10 +438,11 @@ struct ParamSurface : Geometry {
 };
 
 class Sphere : public ParamSurface {
-	vec3 center;
 	f radius;
 public:
-	Sphere(vec3 c, f r) : center(c), radius(r) {}
+	Sphere(vec3 center, f r) : radius(r) {
+		pos = center;
+	}
 
 	void Create() {
 		ParamSurface::Create(16, 8);  // tessellation level
@@ -395,7 +453,7 @@ public:
 		vd.normal = vec3(cos(u * 2 * M_PI) * sin(v * M_PI),
 			sin(u * 2 * M_PI) * sin(v * M_PI),
 			cos(v * M_PI));
-		vd.position = vd.normal * radius + center;
+		vd.position = vd.normal * radius + pos;
 		vd.u = u;
 		vd.v = v;
 		return vd;
@@ -408,41 +466,138 @@ public:
 	Torus(f R, f r) : R(R), r(r) {}
 
 	void Create() {
-		ParamSurface::Create(16, 8);
+		ParamSurface::Create(64, 32);
 	}
 
 	VertexData GenVertexData(f u, f v) {
 		f i = u * 2.0f * M_PI;
 		f j = v * 2.0f * M_PI;
 
-		vec3 t( // tangent vector with respect to big circle
-			-sinf(j),
-			cosf(j),
-			0.0f
-			);
-		vec3 s( // tangent vector with respect to little circle
-			cosf(j) * -sinf(i),
-			sinf(j) * -sinf(i),
-			cosf(i)
-			);
+		vec3 t(-sinf(j), cosf(j), 0.0f);
+		vec3 s(cosf(j) * -sinf(i), sinf(j) * -sinf(i), cosf(i));
 
 		VertexData vd;
-		vd.position = vec3(
-			cosf(j) * (R + cosf(i) * r),
-			sinf(j) * (R + cosf(i) * r),
-			sinf(i) * r
-			);
+		vd.position = vec3(cosf(j) * (R + cosf(i) * r), sinf(j) * (R + cosf(i) * r), sinf(i) * r);
 		vd.normal = -(t % s).Normal();
 		vd.u = u;
 		vd.v = v;
-
 		return vd;
 	}
 };
 
+/*
+class Object {
+protected:
+	Shader* shader;
+	Material* material;
+	Texture* texture;
+	Geometry* geometry;
+	vec3 scale, pos, rotAxis;
+	float rotAngle;
+public:
+
+	Object() : scale(vec3(1, 1, 1)), pos(vec3(0, 0, 0)), rotAxis(vec3(0, 0, 0)), rotAngle(0),
+		shader(nullptr), material(nullptr), texture(nullptr), geometry(nullptr) {}
+
+	virtual void Draw(RenderState state) {
+		state.M = mat4::Scale(scale) *
+			mat4::Rotate(rotAngle, rotAxis) *
+			mat4::Translate(pos);
+		state.Minv = mat4::Translate(-pos) *
+			mat4::Rotate(-rotAngle, rotAxis) *
+			mat4::Scale(vec3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+		state.material = material;
+		state.texture = texture;
+		shader->Bind(state);
+		geometry->Draw();
+	}
+	virtual void Animate(float dt) { }
+};
+
+
+class TheTorus : public Object {
+	Torus torus;
+public:
+	TheTorus(Shader* s) : torus(5, 4) {
+		shader = s;
+		geometry = &torus;
+	}
+};
+
+class Golyo : public Object {
+	Sphere sphere;
+public:
+	Golyo() : sphere(vec3(-2, 2, 1), 1) {}
+};
+
+class Scene {
+	Camera camera;
+	std::vector<Object*> objects;
+	Light light;
+	RenderState state;
+public:
+	void Render() {
+		state.wEye = camera.getEye();
+		state.V = camera.V;
+		state.P = camera.P;
+		state.light = light;
+		for (Object * obj : objects)
+			obj->Draw(state);
+	}
+
+	void Animate(float dt) {
+		for (Object * obj : objects)
+			obj->Animate(dt);
+	}
+
+	void addObject(Object* obj) {
+		objects.push_back(obj);
+	}
+};
+*/
+
+struct Shader {
+	unsigned int shaderProg;
+
+	void Create(const char * vsSrc, const char * fsSrc, const char * fsOuputName) {
+
+		const char* vsAttrNames[] = { "vertexPosition", "vertexNormal" };
+
+		// vertex
+		unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vs, 1, &vsSrc, NULL);
+		glCompileShader(vs);
+		// fragment
+		unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fs, 1, &fsSrc, NULL);
+		glCompileShader(fs);
+		// program
+		shaderProg = glCreateProgram();
+		glAttachShader(shaderProg, vs);
+		glAttachShader(shaderProg, fs);
+		// binding
+		for (int i = 0; i < 2; i++)
+			glBindAttribLocation(shaderProg, i, vsAttrNames[i]);
+		glBindFragDataLocation(shaderProg, 0, fsOuputName);
+		// link
+		glLinkProgram(shaderProg);
+		checkLinking(shaderProgram);
+			shaderProgram = shaderProg;
+	}
+	virtual void Bind(RenderState& state) {
+		glUseProgram(shaderProg);
+	}
+};
 // The virtual world: collection of two objects
+
+
 Sphere sphere(vec3(-2, 2, 1), 1);
 Torus torus(5, 4);
+
+//Scene scene;
+
+Shader defaultShader;
+RenderState rs;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
@@ -453,11 +608,19 @@ void onInitialization() {
 	glViewport(0, 0, windowWidth, windowHeight);
 
 	// Create objects by setting up their vertex data on the GPU
-	//	triangle.Create();
+
+
 	sphere.Create();
 	torus.Create();
 
+	char* vertattribs[] = { "vertexPosition", "vertexNormal" };
 
+	char* fragarrtib = "fragmentColor";
+	defaultShader.Create(vertexSource, fragmentSource, fragarrtib);
+	defaultShader.Bind(rs);
+
+
+	/*
 	// Create vertex shader from string
 	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
 	if (!vertexShader) {
@@ -498,6 +661,8 @@ void onInitialization() {
 	checkLinking(shaderProgram);
 	// make this program run
 	glUseProgram(shaderProgram);
+
+	*/
 }
 
 void onExit() {
@@ -509,7 +674,7 @@ void onExit() {
 void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
-													
+
 	sphere.Draw();
 	torus.Draw();
 
@@ -542,7 +707,8 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
-
+	camera.Animate(sec);					// animate the camera
+	light.Animate(sec);
 	glutPostRedisplay();					// redraw the scene
 }
 
