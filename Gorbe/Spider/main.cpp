@@ -1,4 +1,36 @@
-// HEAD ++
+//=============================================================================================
+// Szamitogepes grafika hazi feladat keret. Ervenyes 2016-tol.
+// A //~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+// sorokon beluli reszben celszeru garazdalkodni, mert a tobbit ugyis toroljuk.
+// A beadott program csak ebben a fajlban lehet, a fajl 1 byte-os ASCII karaktereket tartalmazhat.
+// Tilos:
+// - mast "beincludolni", illetve mas konyvtarat hasznalni
+// - faljmuveleteket vegezni a printf-et kivéve
+// - new operatort hivni a lefoglalt adat korrekt felszabaditasa nelkul
+// - felesleges programsorokat a beadott programban hagyni
+// - felesleges kommenteket a beadott programba irni a forrasmegjelolest kommentjeit kiveve
+// ---------------------------------------------------------------------------------------------
+// A feladatot ANSI C++ nyelvu forditoprogrammal ellenorizzuk, a Visual Studio-hoz kepesti elteresekrol
+// es a leggyakoribb hibakrol (pl. ideiglenes objektumot nem lehet referencia tipusnak ertekul adni)
+// a hazibeado portal ad egy osszefoglalot.
+// ---------------------------------------------------------------------------------------------
+// A feladatmegoldasokban csak olyan OpenGL fuggvenyek hasznalhatok, amelyek az oran a feladatkiadasig elhangzottak 
+//
+// NYILATKOZAT
+// ---------------------------------------------------------------------------------------------
+// Nev    : Mikulas Bence
+// Neptun : G8MZZ1
+// ---------------------------------------------------------------------------------------------
+// ezennel kijelentem, hogy a feladatot magam keszitettem, es ha barmilyen segitseget igenybe vettem vagy
+// mas szellemi termeket felhasznaltam, akkor a forrast es az atvett reszt kommentekben egyertelmuen jeloltem.
+// A forrasmegjeloles kotelme vonatkozik az eloadas foliakat es a targy oktatoi, illetve a
+// grafhazi doktor tanacsait kiveve barmilyen csatornan (szoban, irasban, Interneten, stb.) erkezo minden egyeb
+// informaciora (keplet, program, algoritmus, stb.). Kijelentem, hogy a forrasmegjelolessel atvett reszeket is ertem,
+// azok helyessegere matematikai bizonyitast tudok adni. Tisztaban vagyok azzal, hogy az atvett reszek nem szamitanak
+// a sajat kontribucioba, igy a feladat elfogadasarol a tobbi resz mennyisege es minosege alapjan szuletik dontes.
+// Tudomasul veszem, hogy a forrasmegjeloles kotelmenek megsertese eseten a hazifeladatra adhato pontokat
+// negativ elojellel szamoljak el es ezzel parhuzamosan eljaras is indul velem szemben.
+//=============================================================================================
 
 #define _USE_MATH_DEFINES
 #include <stdio.h>
@@ -206,7 +238,6 @@ public:
 	}
 };
 
-// 3D point in homogeneous coordinates
 struct vec4 {
 	float v[4];
 
@@ -228,7 +259,6 @@ struct vec4 {
 		glUniform4f(location, v[0], v[1], v[2], v[3]);
 	}
 };
-
 
 class Camera {
 	vec3 wEye, wLookat, wVup;
@@ -263,29 +293,21 @@ public:
 			);
 	}
 
-	vec3 getEye() { return wEye; }
-
-	void Animate(float t) {
-		static vec4 org = vec4(wEye.x, wEye.y, wEye.z, 1);
-		vec4 new_pos = org * mat4::Rotate(t / 10, vec3(0, 0, 1));
-		wEye = vec3(new_pos.v[0], new_pos.v[1], new_pos.v[2]);
+	vec3 getEye() {
+		return wEye; 
 	}
 };
 
 struct Light {
 	vec4 pos;
+	vec3 La, Le;
 
 	void Animate(float t) {
 		static vec4 org = pos;
 		pos = org * mat4::Rotate(-t, vec3(0, 0, 1));
 	}
-
-	Light(const vec4& pos) : pos(pos) {}
-	Light() : pos (vec4(-1, -3, 0, 1)){}
 };
 
-// handle of the shader program
-unsigned int shaderProgram;
 
 void addUniformFloatToShader(const int& shader, float a, const char* name) {
 	int location = glGetUniformLocation(shader, name);
@@ -316,6 +338,10 @@ struct Texture {
 		glBindTexture(GL_TEXTURE_2D, textureId);
 	}
 
+	virtual std::vector<f> LoadTextureImage(char* const fname, int const width, int const height) const = 0;
+};
+
+struct SampleTexture : public Texture {
 	std::vector<f> LoadTextureImage(char* const fname, int const width, int const height) const {
 		std::vector<f> img(3 * width * height);
 
@@ -326,7 +352,6 @@ struct Texture {
 				img[(i * height + j) * 3 + 2] = 0.5f;
 			}
 		}
-
 		return img;
 	}
 };
@@ -338,7 +363,17 @@ struct VertexData {
 
 
 struct Material {
+	vec3 kd, ks, ka;
+	f shine;
+};
 
+struct Gold : public Material {
+	Gold() {
+		kd = vec3(0.75164, 0.60648, 0.22648);
+		ks = vec3(0.628281, 0.555802, 0.366065);
+		ka = vec3(0.24725, 0.1995, 0.0745);
+		shine = 51.2f;
+	}
 };
 
 struct RenderState {
@@ -349,22 +384,15 @@ struct RenderState {
 	Material* material;
 };
 
-
-
 struct Geometry {
 	unsigned int vao, nVtx;
-	vec3 scale, rotAxis, pos;
-	float rotAngle;
 
-	Geometry() : scale(vec3(1, 1, 1)), rotAxis(0, 0, 0), pos(0, 0, 0), rotAngle(0) {}
-
-	void Create() {
+	virtual void Create() {
 		glGenVertexArrays(1, &vao);
 		glBindVertexArray(vao);
 	}
 
 	void Draw() {
-
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
 	}
@@ -373,7 +401,7 @@ struct Geometry {
 struct ParamSurface : public Geometry {
 	virtual VertexData GenVertexData(f u, f v) = 0;
 
-	void Create(int N, int M) {
+	virtual void Create(int N, int M) {
 		Geometry::Create();
 
 		nVtx = N * M * 6;
@@ -409,13 +437,10 @@ struct ParamSurface : public Geometry {
 };
 
 class Sphere : public ParamSurface {
-	f radius;
-public:
-	Sphere(vec3 center, f r) : radius(r) {
-		pos = center;
-	}
 
-	void Create() {
+public:
+
+	virtual void Create() {
 		ParamSurface::Create(16, 8);  // tessellation level
 	}
 
@@ -424,7 +449,7 @@ public:
 		vd.normal = vec3(cos(u * 2 * M_PI) * sin(v * M_PI),
 			sin(u * 2 * M_PI) * sin(v * M_PI),
 			cos(v * M_PI));
-		vd.position = vd.normal * radius + pos;
+		vd.position = vd.normal;
 		vd.u = u;
 		vd.v = v;
 		return vd;
@@ -456,62 +481,62 @@ public:
 	}
 };
 
-
 struct Shader {
 	unsigned int shaderProg;
 
-	void Create(const char * vsSrc, const char * fsSrc, const char * fsOuputName) {
-
-		const char* vsAttrNames[] = { "vertexPosition", "vertexNormal" };
-
+	void Create(const char * vsSrc, const std::vector<const char*>& vsAttrNames, const char * fsSrc, const char * fsOuputName) {
 		// vertex
 		unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
 		glShaderSource(vs, 1, &vsSrc, NULL);
 		glCompileShader(vs);
+		checkShader(vs, "Vertex shader error");
 		// fragment
 		unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
 		glShaderSource(fs, 1, &fsSrc, NULL);
 		glCompileShader(fs);
+		checkShader(fs, "Fragment shader error");
 		// program
 		shaderProg = glCreateProgram();
 		glAttachShader(shaderProg, vs);
 		glAttachShader(shaderProg, fs);
+
 		// binding
-		for (int i = 0; i < 2; i++)
+		for (int i = 0; i < vsAttrNames.size(); i++)
 			glBindAttribLocation(shaderProg, i, vsAttrNames[i]);
 		glBindFragDataLocation(shaderProg, 0, fsOuputName);
 		// link
 		glLinkProgram(shaderProg);
-		checkLinking(shaderProgram);
-		shaderProgram = shaderProg;
+		checkLinking(shaderProg);
 	}
 
 	virtual void Bind(RenderState& state) {
 
 		mat4 MVP = state.M * state.V * state.P;
 
-		MVP.SetUniform(shaderProgram, "MVP");
-		state.M.SetUniform(shaderProgram, "M");
-		state.Minv.SetUniform(shaderProgram, "Minv");
+		MVP.SetUniform(shaderProg, "MVP");
+		state.M.SetUniform(shaderProg, "M");
+		state.Minv.SetUniform(shaderProg, "Minv");
+		state.wEye.SetUniform(shaderProg, "wEye");
 
-
-
-		state.light.pos.SetUniform(shaderProgram, "wLiPos");
-		state.wEye.SetUniform(shaderProgram, "wEye");
-
-		vec3(0.75164, 0.60648, 0.22648).SetUniform(shaderProgram, "kd");
-		vec3(0.628281, 0.555802, 0.366065).SetUniform(shaderProgram, "ks");
-		vec3(0.24725, 0.1995, 0.0745).SetUniform(shaderProgram, "ka");
-		vec3(0.01, 0.01, 0.01).SetUniform(shaderProgram, "La");
-		vec3(1, 1, 1).SetUniform(shaderProgram, "Le");
-
-		addUniformFloatToShader(shaderProgram, 51.2f, "shine");
-
+		if (state.material != nullptr) {
+			state.material->kd.SetUniform(shaderProg, "kd");
+			state.material->ks.SetUniform(shaderProg, "ks");
+			state.material->ka.SetUniform(shaderProg, "ka");
+			addUniformFloatToShader(shaderProg, state.material->shine, "shine");
+		}
+		
+		state.light.pos.SetUniform(shaderProg, "wLiPos");
+		state.light.La.SetUniform(shaderProg, "La");
+		state.light.Le.SetUniform(shaderProg, "Le");
 
 		glUseProgram(shaderProg);
 	}
-};
 
+	void DeleteShader() {
+		glDeleteProgram(shaderProg);
+	}
+
+};
 
 class Object {
 protected:
@@ -541,34 +566,44 @@ public:
 	virtual void Animate(float dt) { }
 
 	void Create() {
-		if (geometry != nullptr)
-			geometry->Create();
+		geometry->Create();
 	}
 };
 
-
 class TheTorus : public Object {
 	Torus torus;
+	Gold gold;
 
 public:
 	TheTorus(Shader* s) : torus(5, 4) {
 		shader = s;
+		material = &gold;
 		geometry = &torus;
 	}
 };
 
-class Golyo : public Object {
+class Ball : public Object {
 	Sphere sphere;
+	Gold gold;
 
 public:
-	Golyo(Shader* s) : sphere(vec3(-2, 2, 1), 1) {
+	Ball(Shader* s) {
 		shader = s;
 		geometry = &sphere;
+		material = &gold;
+		pos = vec3(-3, -2, -2.5);
+	}
+
+	void Animate(float t) {
+		static vec4 org = vec4(pos.x, pos.y, pos.z, 1);
+		vec4 new_pos = org * mat4::Rotate(t, vec3(0, 0, 1));
+		pos = vec3(new_pos.v[0], new_pos.v[1], new_pos.v[2]);
 	}
 };
 
 
 class Scene {
+protected:
 	Camera camera;
 	std::vector<Object*> objects;
 	Light light;
@@ -599,90 +634,36 @@ public:
 	}
 };
 
-
-// The virtual world: collection of two objects
-
+class TorusScene : public Scene {
+public:
+	TorusScene() {
+		light.pos = vec4(-1, -3, 0, 1);
+		light.La = vec3(0.01, 0.01, 0.01);
+		light.Le = vec3(1, 1, 1);
+	}
+};
 
 Shader defaultShader;
-
-Golyo golyo(&defaultShader);
+// The virtual world: collection of two objects
+Ball ball(&defaultShader);
 TheTorus thetorus(&defaultShader);
-
-Scene scene;
-
+TorusScene scene;
 
 // Initialization, create an OpenGL context
 void onInitialization() {
-
 	glEnable(GL_DEPTH_TEST); // z-buffer is on
-	glDisable(GL_CULL_FACE); // backface culling is off ?????
-
+	glDisable(GL_CULL_FACE); // backface culling is off
 	glViewport(0, 0, windowWidth, windowHeight);
 
-	// Create objects by setting up their vertex data on the GPU
-
 	scene.addObject(&thetorus);
-	scene.addObject(&golyo);
-
-char* vertattribs[] = { "vertexPosition", "vertexNormal" };
-
-	char* fragarrtib = "fragmentColor";
-
-	defaultShader.Create(vertexSource, fragmentSource, fragarrtib);
+	scene.addObject(&ball);
 	scene.Create();
-	
-	// TODO: ezt vissza kell tenni!
-	
-	
 
-
-	/*
-	// Create vertex shader from string
-	unsigned int vertexShader = glCreateShader(GL_VERTEX_SHADER);
-	if (!vertexShader) {
-		printf("Error in vertex shader creation\n");
-		exit(1);
-	}
-	glShaderSource(vertexShader, 1, &vertexSource, NULL);
-	glCompileShader(vertexShader);
-	checkShader(vertexShader, "Vertex shader error");
-
-	// Create fragment shader from string
-	unsigned int fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-	if (!fragmentShader) {
-		printf("Error in fragment shader creation\n");
-		exit(1);
-	}
-	glShaderSource(fragmentShader, 1, &fragmentSource, NULL);
-	glCompileShader(fragmentShader);
-	checkShader(fragmentShader, "Fragment shader error");
-
-	// Attach shaders to a single program
-	shaderProgram = glCreateProgram();
-	if (!shaderProgram) {
-		printf("Error in shader program creation\n");
-		exit(1);
-	}
-	glAttachShader(shaderProgram, vertexShader);
-	glAttachShader(shaderProgram, fragmentShader);
-
-	// Connect Attrib Arrays to input variables of the vertex shader
-	glBindAttribLocation(shaderProgram, 0, "vertexPosition"); // vertexPosition gets values from Attrib Array 0
-	glBindAttribLocation(shaderProgram, 1, "vertexNormal");    // vertexColor gets values from Attrib Array 1
-
-															   // Connect the fragmentColor to the frame buffer memory
-	glBindFragDataLocation(shaderProgram, 0, "fragmentColor");	// fragmentColor goes to the frame buffer memory
-																// program packaging
-	glLinkProgram(shaderProgram);
-	checkLinking(shaderProgram);
-	// make this program run
-	glUseProgram(shaderProgram);
-
-	*/
+	defaultShader.Create(vertexSource, { "vertexPosition", "vertexNormal" }, fragmentSource, "fragmentColor");
 }
 
 void onExit() {
-	glDeleteProgram(shaderProgram);
+	defaultShader.DeleteShader();
 	printf("exit");
 }
 
@@ -722,6 +703,7 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
+	scene.Animate(sec);
 	glutPostRedisplay();					// redraw the scene
 }
 
