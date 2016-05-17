@@ -281,13 +281,8 @@ struct Light {
 	}
 
 	Light(const vec4& pos) : pos(pos) {}
-	Light() {}
+	Light() : pos (vec4(-1, -3, 0, 1)){}
 };
-
-Light light(vec4(-1, -3, 0, 1));
-
-// 3D camera
-Camera camera;
 
 // handle of the shader program
 unsigned int shaderProgram;
@@ -369,30 +364,6 @@ struct Geometry {
 	}
 
 	void Draw() {
-
-		mat4 M = mat4::Scale(scale) *
-			mat4::Rotate(rotAngle, rotAxis) *
-			mat4::Translate(pos.x);
-		mat4 Minv = mat4::Translate(-pos) *
-			mat4::Rotate(-rotAngle, rotAxis) *
-			mat4::Scale(vec3(1 / scale.x, 1 / scale.y, 1 / scale.z));
-		mat4 MVP = M * camera.V() * camera.P();
-
-		// set GPU uniform matrix variable MVP with the content of CPU variable MVPTransform
-		MVP.SetUniform(shaderProgram, "MVP");
-		M.SetUniform(shaderProgram, "M");
-		Minv.SetUniform(shaderProgram, "Minv");
-		light.pos.SetUniform(shaderProgram, "wLiPos");
-		camera.getEye().SetUniform(shaderProgram, "wLiPos");
-
-		vec3(0.75164, 0.60648, 0.22648).SetUniform(shaderProgram, "kd");
-		vec3(0.628281, 0.555802, 0.366065).SetUniform(shaderProgram, "ks");
-		vec3(0.24725, 0.1995, 0.0745).SetUniform(shaderProgram, "ka");
-		vec3(0.01, 0.01, 0.01).SetUniform(shaderProgram, "La");
-		vec3(1, 1, 1).SetUniform(shaderProgram, "Le");
-
-		addUniformFloatToShader(shaderProgram, 51.2f, "shine");
-
 
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
@@ -485,76 +456,6 @@ public:
 	}
 };
 
-/*
-class Object {
-protected:
-	Shader* shader;
-	Material* material;
-	Texture* texture;
-	Geometry* geometry;
-	vec3 scale, pos, rotAxis;
-	float rotAngle;
-public:
-
-	Object() : scale(vec3(1, 1, 1)), pos(vec3(0, 0, 0)), rotAxis(vec3(0, 0, 0)), rotAngle(0),
-		shader(nullptr), material(nullptr), texture(nullptr), geometry(nullptr) {}
-
-	virtual void Draw(RenderState state) {
-		state.M = mat4::Scale(scale) *
-			mat4::Rotate(rotAngle, rotAxis) *
-			mat4::Translate(pos);
-		state.Minv = mat4::Translate(-pos) *
-			mat4::Rotate(-rotAngle, rotAxis) *
-			mat4::Scale(vec3(1 / scale.x, 1 / scale.y, 1 / scale.z));
-		state.material = material;
-		state.texture = texture;
-		shader->Bind(state);
-		geometry->Draw();
-	}
-	virtual void Animate(float dt) { }
-};
-
-
-class TheTorus : public Object {
-	Torus torus;
-public:
-	TheTorus(Shader* s) : torus(5, 4) {
-		shader = s;
-		geometry = &torus;
-	}
-};
-
-class Golyo : public Object {
-	Sphere sphere;
-public:
-	Golyo() : sphere(vec3(-2, 2, 1), 1) {}
-};
-
-class Scene {
-	Camera camera;
-	std::vector<Object*> objects;
-	Light light;
-	RenderState state;
-public:
-	void Render() {
-		state.wEye = camera.getEye();
-		state.V = camera.V;
-		state.P = camera.P;
-		state.light = light;
-		for (Object * obj : objects)
-			obj->Draw(state);
-	}
-
-	void Animate(float dt) {
-		for (Object * obj : objects)
-			obj->Animate(dt);
-	}
-
-	void addObject(Object* obj) {
-		objects.push_back(obj);
-	}
-};
-*/
 
 struct Shader {
 	unsigned int shaderProg;
@@ -582,22 +483,133 @@ struct Shader {
 		// link
 		glLinkProgram(shaderProg);
 		checkLinking(shaderProgram);
-			shaderProgram = shaderProg;
+		shaderProgram = shaderProg;
 	}
+
 	virtual void Bind(RenderState& state) {
+
+		mat4 MVP = state.M * state.V * state.P;
+
+		MVP.SetUniform(shaderProgram, "MVP");
+		state.M.SetUniform(shaderProgram, "M");
+		state.Minv.SetUniform(shaderProgram, "Minv");
+
+
+
+		state.light.pos.SetUniform(shaderProgram, "wLiPos");
+		state.wEye.SetUniform(shaderProgram, "wEye");
+
+		vec3(0.75164, 0.60648, 0.22648).SetUniform(shaderProgram, "kd");
+		vec3(0.628281, 0.555802, 0.366065).SetUniform(shaderProgram, "ks");
+		vec3(0.24725, 0.1995, 0.0745).SetUniform(shaderProgram, "ka");
+		vec3(0.01, 0.01, 0.01).SetUniform(shaderProgram, "La");
+		vec3(1, 1, 1).SetUniform(shaderProgram, "Le");
+
+		addUniformFloatToShader(shaderProgram, 51.2f, "shine");
+
+
 		glUseProgram(shaderProg);
 	}
 };
+
+
+class Object {
+protected:
+	Shader* shader;
+	Material* material;
+	Texture* texture;
+	Geometry* geometry;
+	vec3 scale, pos, rotAxis;
+	float rotAngle;
+public:
+
+	Object() : scale(vec3(1, 1, 1)), pos(vec3(0, 0, 0)), rotAxis(vec3(0, 0, 0)), rotAngle(0),
+		shader(nullptr), material(nullptr), texture(nullptr), geometry(nullptr) {}
+
+	virtual void Draw(RenderState state) {
+		state.M = mat4::Scale(scale) *
+			mat4::Rotate(rotAngle, rotAxis) *
+			mat4::Translate(pos);
+		state.Minv = mat4::Translate(-pos) *
+			mat4::Rotate(-rotAngle, rotAxis) *
+			mat4::Scale(vec3(1 / scale.x, 1 / scale.y, 1 / scale.z));
+		state.material = material;
+		state.texture = texture;
+		shader->Bind(state);
+		geometry->Draw();
+	}
+	virtual void Animate(float dt) { }
+
+	void Create() {
+		if (geometry != nullptr)
+			geometry->Create();
+	}
+};
+
+
+class TheTorus : public Object {
+	Torus torus;
+
+public:
+	TheTorus(Shader* s) : torus(5, 4) {
+		shader = s;
+		geometry = &torus;
+	}
+};
+
+class Golyo : public Object {
+	Sphere sphere;
+
+public:
+	Golyo(Shader* s) : sphere(vec3(-2, 2, 1), 1) {
+		shader = s;
+		geometry = &sphere;
+	}
+};
+
+
+class Scene {
+	Camera camera;
+	std::vector<Object*> objects;
+	Light light;
+	RenderState state;
+
+public:
+	void Render() {
+		state.wEye = camera.getEye();
+		state.V = camera.V();
+		state.P = camera.P();
+		state.light = light;
+		for (Object * obj : objects)
+			obj->Draw(state);
+	}
+
+	void Create() {
+		for (Object * obj : objects)
+			obj->Create();
+	}
+
+	void Animate(float dt) {
+		for (Object * obj : objects)
+			obj->Animate(dt);
+	}
+
+	void addObject(Object* obj) {
+		objects.push_back(obj);
+	}
+};
+
+
 // The virtual world: collection of two objects
 
 
-Sphere sphere(vec3(-2, 2, 1), 1);
-Torus torus(5, 4);
-
-//Scene scene;
-
 Shader defaultShader;
-RenderState rs;
+
+Golyo golyo(&defaultShader);
+TheTorus thetorus(&defaultShader);
+
+Scene scene;
+
 
 // Initialization, create an OpenGL context
 void onInitialization() {
@@ -609,15 +621,19 @@ void onInitialization() {
 
 	// Create objects by setting up their vertex data on the GPU
 
+	scene.addObject(&thetorus);
+	scene.addObject(&golyo);
 
-	sphere.Create();
-	torus.Create();
-
-	char* vertattribs[] = { "vertexPosition", "vertexNormal" };
+char* vertattribs[] = { "vertexPosition", "vertexNormal" };
 
 	char* fragarrtib = "fragmentColor";
+
 	defaultShader.Create(vertexSource, fragmentSource, fragarrtib);
-	defaultShader.Bind(rs);
+	scene.Create();
+	
+	// TODO: ezt vissza kell tenni!
+	
+	
 
 
 	/*
@@ -675,8 +691,7 @@ void onDisplay() {
 	glClearColor(0, 0, 0, 0);							// background color 
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // clear the screen
 
-	sphere.Draw();
-	torus.Draw();
+	scene.Render();
 
 	glutSwapBuffers();									// exchange the two buffers
 }
@@ -707,8 +722,6 @@ void onMouseMotion(int pX, int pY) {}
 void onIdle() {
 	long time = glutGet(GLUT_ELAPSED_TIME); // elapsed time since the start of the program
 	float sec = time / 1000.0f;				// convert msec to sec
-	camera.Animate(sec);					// animate the camera
-	light.Animate(sec);
 	glutPostRedisplay();					// redraw the scene
 }
 
