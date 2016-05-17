@@ -319,30 +319,36 @@ void addUniformFloatToShader(const int& shader, float a, const char* name) {
 
 struct Texture {
 	unsigned int textureId;
-	Texture(char* fname) {
+	const char* fname;
+
+	Texture(const char* fname) : fname(fname) { }
+
+	void Create() {
 		glGenTextures(1, &textureId);
 		glBindTexture(GL_TEXTURE_2D, textureId); // binding
-		int width, height;
+		int width = 100, height = 100;
 		std::vector<f> image = LoadTextureImage(fname, width, height); // megírni!
-		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height,
-			0, GL_RGB, GL_FLOAT, &image[0]); //Texture -> OpenGL
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_FLOAT, &image[0]); //Texture -> OpenGL
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 	}
 
 	void Bind(unsigned int shaderProg) {
 		int samplerUnit = GL_TEXTURE0; // GL_TEXTURE1, ...
-		int location = glGetUniformLocation(shaderProg, "samplerUnit");
-		glUniform1i(location, samplerUnit);
+		int location = glGetUniformLocation(shaderProg, fname);
+		glUniform1i(location, 0);
 		glActiveTexture(samplerUnit);
 		glBindTexture(GL_TEXTURE_2D, textureId);
 	}
 
-	virtual std::vector<f> LoadTextureImage(char* const fname, int const width, int const height) const = 0;
+	virtual std::vector<f> LoadTextureImage(const char* fname, int const width, int const height) const = 0;
 };
 
 struct SampleTexture : public Texture {
-	std::vector<f> LoadTextureImage(char* const fname, int const width, int const height) const {
+
+	SampleTexture(const char* fname) : Texture(fname) {}
+
+	std::vector<f> LoadTextureImage(const char* fname, int const width, int const height) const {
 		std::vector<f> img(3 * width * height);
 
 		for (int i = 0; i < width; i++) {
@@ -384,6 +390,65 @@ struct RenderState {
 	Material* material;
 };
 
+
+struct Shader {
+	unsigned int shaderProg;
+
+	void Create(const char * vsSrc, const std::vector<const char*>& vsAttrNames, const char * fsSrc, const char * fsOuputName) {
+		// vertex
+		unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
+		glShaderSource(vs, 1, &vsSrc, NULL);
+		glCompileShader(vs);
+		checkShader(vs, "Vertex shader error");
+		// fragment
+		unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
+		glShaderSource(fs, 1, &fsSrc, NULL);
+		glCompileShader(fs);
+		checkShader(fs, "Fragment shader error");
+		// program
+		shaderProg = glCreateProgram();
+		glAttachShader(shaderProg, vs);
+		glAttachShader(shaderProg, fs);
+
+		// binding
+		for (int i = 0; i < vsAttrNames.size(); i++)
+			glBindAttribLocation(shaderProg, i, vsAttrNames[i]);
+		glBindFragDataLocation(shaderProg, 0, fsOuputName);
+		// link
+		glLinkProgram(shaderProg);
+		checkLinking(shaderProg);
+	}
+
+	virtual void Bind(RenderState& state) {
+
+		mat4 MVP = state.M * state.V * state.P;
+
+		MVP.SetUniform(shaderProg, "MVP");
+		state.M.SetUniform(shaderProg, "M");
+		state.Minv.SetUniform(shaderProg, "Minv");
+		state.wEye.SetUniform(shaderProg, "wEye");
+
+		if (state.material != nullptr) {
+			state.material->kd.SetUniform(shaderProg, "kd");
+			state.material->ks.SetUniform(shaderProg, "ks");
+			state.material->ka.SetUniform(shaderProg, "ka");
+			addUniformFloatToShader(shaderProg, state.material->shine, "shine");
+		}
+
+		state.light.pos.SetUniform(shaderProg, "wLiPos");
+		state.light.La.SetUniform(shaderProg, "La");
+		state.light.Le.SetUniform(shaderProg, "Le");
+
+		glUseProgram(shaderProg);
+	}
+
+	void DeleteShader() {
+		glDeleteProgram(shaderProg);
+	}
+
+};
+
+
 struct Geometry {
 	unsigned int vao, nVtx;
 
@@ -392,9 +457,20 @@ struct Geometry {
 		glBindVertexArray(vao);
 	}
 
-	void Draw() {
+	void Draw(Shader* shader, Texture* texture) {
+
+		if (texture != nullptr) {
+		
+			int samplerUnit = GL_TEXTURE0; // GL_TEXTURE1, …
+			int location = glGetUniformLocation(shader->shaderProg, "samplerUnit");
+			glUniform1i(location, samplerUnit);
+			glActiveTexture(samplerUnit);
+
+			glBindTexture(GL_TEXTURE_2D, texture->textureId);
+		}
 		glBindVertexArray(vao);
 		glDrawArrays(GL_TRIANGLES, 0, nVtx);
+
 	}
 };
 
@@ -481,63 +557,6 @@ public:
 	}
 };
 
-struct Shader {
-	unsigned int shaderProg;
-
-	void Create(const char * vsSrc, const std::vector<const char*>& vsAttrNames, const char * fsSrc, const char * fsOuputName) {
-		// vertex
-		unsigned int vs = glCreateShader(GL_VERTEX_SHADER);
-		glShaderSource(vs, 1, &vsSrc, NULL);
-		glCompileShader(vs);
-		checkShader(vs, "Vertex shader error");
-		// fragment
-		unsigned int fs = glCreateShader(GL_FRAGMENT_SHADER);
-		glShaderSource(fs, 1, &fsSrc, NULL);
-		glCompileShader(fs);
-		checkShader(fs, "Fragment shader error");
-		// program
-		shaderProg = glCreateProgram();
-		glAttachShader(shaderProg, vs);
-		glAttachShader(shaderProg, fs);
-
-		// binding
-		for (int i = 0; i < vsAttrNames.size(); i++)
-			glBindAttribLocation(shaderProg, i, vsAttrNames[i]);
-		glBindFragDataLocation(shaderProg, 0, fsOuputName);
-		// link
-		glLinkProgram(shaderProg);
-		checkLinking(shaderProg);
-	}
-
-	virtual void Bind(RenderState& state) {
-
-		mat4 MVP = state.M * state.V * state.P;
-
-		MVP.SetUniform(shaderProg, "MVP");
-		state.M.SetUniform(shaderProg, "M");
-		state.Minv.SetUniform(shaderProg, "Minv");
-		state.wEye.SetUniform(shaderProg, "wEye");
-
-		if (state.material != nullptr) {
-			state.material->kd.SetUniform(shaderProg, "kd");
-			state.material->ks.SetUniform(shaderProg, "ks");
-			state.material->ka.SetUniform(shaderProg, "ka");
-			addUniformFloatToShader(shaderProg, state.material->shine, "shine");
-		}
-		
-		state.light.pos.SetUniform(shaderProg, "wLiPos");
-		state.light.La.SetUniform(shaderProg, "La");
-		state.light.Le.SetUniform(shaderProg, "Le");
-
-		glUseProgram(shaderProg);
-	}
-
-	void DeleteShader() {
-		glDeleteProgram(shaderProg);
-	}
-
-};
-
 class Object {
 protected:
 	Shader* shader;
@@ -561,7 +580,9 @@ public:
 		state.material = material;
 		state.texture = texture;
 		shader->Bind(state);
-		geometry->Draw();
+		if (texture != nullptr)
+			texture->Bind(shader->shaderProg);
+		geometry->Draw(shader, texture);
 	}
 	virtual void Animate(float dt) { }
 
@@ -573,12 +594,14 @@ public:
 class TheTorus : public Object {
 	Torus torus;
 	Gold gold;
+	
 
 public:
-	TheTorus(Shader* s) : torus(5, 4) {
+	TheTorus(Shader* s, Texture* t) : torus(5, 4) {
 		shader = s;
 		material = &gold;
 		geometry = &torus;
+		texture = t;
 	}
 };
 
@@ -644,9 +667,10 @@ public:
 };
 
 Shader defaultShader;
+SampleTexture texture("samplerUnit");
 // The virtual world: collection of two objects
 Ball ball(&defaultShader);
-TheTorus thetorus(&defaultShader);
+TheTorus thetorus(&defaultShader, &texture);
 TorusScene scene;
 
 // Initialization, create an OpenGL context
@@ -654,7 +678,7 @@ void onInitialization() {
 	glEnable(GL_DEPTH_TEST); // z-buffer is on
 	glDisable(GL_CULL_FACE); // backface culling is off
 	glViewport(0, 0, windowWidth, windowHeight);
-
+	texture.Create();
 	scene.addObject(&thetorus);
 	scene.addObject(&ball);
 	scene.Create();
